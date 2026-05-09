@@ -2863,7 +2863,14 @@ async function init() {
             renderAuth();
           } catch (e) {
             console.error(e);
-            refs.loginFeedback.textContent = "Erro ao carregar dados do Supabase.";
+            const detail =
+              (e && typeof e === "object" && e.message) ||
+              (e && typeof e === "object" && e.details) ||
+              String(e || "");
+            refs.loginFeedback.textContent =
+              detail && detail.length < 280
+                ? `Erro ao carregar dados: ${detail}`
+                : "Erro ao carregar dados. Abra o console (F12). Se aparecer permission denied (403), rode supabase/migrations/002_api_grants.sql no SQL Editor.";
             renderAuth();
           }
           return;
