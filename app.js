@@ -49,7 +49,12 @@ async function getSupabase() {
   const { createClient } = await import("https://esm.sh/@supabase/supabase-js@2");
   const projectUrl = normalizeSupabaseProjectUrl(window.__SUPABASE_URL__);
   supabaseClient = createClient(projectUrl, window.__SUPABASE_ANON_KEY__, {
-    auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl: true,
+      storage: typeof window !== "undefined" ? window.localStorage : undefined
+    }
   });
   return supabaseClient;
 }
@@ -196,6 +201,9 @@ async function bootstrapFromSupabase(session) {
 async function applySupabaseSession(session) {
   if (!session?.user) {
     renderAuth();
+    return;
+  }
+  if (state.user && state.user.id === session.user.id) {
     return;
   }
   try {
@@ -2853,6 +2861,16 @@ async function init() {
     try {
       const supabase = await getSupabase();
       if (!supabase) throw new Error("client");
+
+      const {
+        data: { session: existingSession }
+      } = await supabase.auth.getSession();
+      if (existingSession) {
+        await applySupabaseSession(existingSession);
+      } else {
+        renderAuth();
+      }
+
       supabase.auth.onAuthStateChange(async (event, session) => {
         if (event === "INITIAL_SESSION") {
           if (!session) {
