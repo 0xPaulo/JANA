@@ -27,6 +27,10 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    # Evita aviso de deprecação Node 20 nos actions oficiais até migração global do runner.
+    # https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
