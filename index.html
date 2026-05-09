@@ -2,10 +2,17 @@
 <html class="light" lang="pt-BR">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
+  <meta name="theme-color" content="#000e24">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Service Mode">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="format-detection" content="telephone=no">
+  <link rel="apple-touch-icon" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'><rect width='180' height='180' rx='40' fill='%23000e24'/><text x='50%25' y='58%25' text-anchor='middle' font-family='Helvetica' font-weight='800' font-size='100' fill='%23d6e3ff'>SM</text></svg>">
   <title>Service Mode - Gestao de Comandas</title>
   <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
   <link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -89,9 +96,58 @@
     .bottom-tab--active .bottom-tab-icon {
       font-variation-settings: "FILL" 1, "wght" 500, "GRAD" 0, "opsz" 24;
     }
-    body { font-family: "Hanken Grotesk", sans-serif; -webkit-font-smoothing: antialiased; min-height: max(884px, 100dvh); }
+    html, body {
+      height: 100%;
+      overflow: hidden;
+      overscroll-behavior: none;
+    }
+    body {
+      font-family: "Hanken Grotesk", sans-serif;
+      -webkit-font-smoothing: antialiased;
+      -webkit-tap-highlight-color: transparent;
+      -webkit-touch-callout: none;
+      text-size-adjust: 100%;
+      -webkit-text-size-adjust: 100%;
+    }
+    /* iOS faz zoom automatico em inputs com font-size < 16px. */
+    input, select, textarea {
+      font-size: 16px !important;
+    }
+    /* Permite selecao apenas onde faz sentido. */
+    input, textarea, [contenteditable="true"] { -webkit-user-select: text; user-select: text; }
+    button { -webkit-user-select: none; user-select: none; }
+    /* App shell: o shell em si nao rola; somente #mainContent rola por dentro. */
+    .app-shell {
+      height: var(--app-height);
+      min-height: var(--app-height);
+      max-height: var(--app-height);
+      display: flex;
+      flex-direction: column;
+      padding-top: env(safe-area-inset-top);
+    }
+    .app-shell-header { flex: 0 0 auto; }
+    .app-shell-main {
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      overscroll-behavior-y: contain;
+    }
+    .app-viewport-fill {
+      height: var(--app-height);
+      min-height: var(--app-height);
+      max-height: var(--app-height);
+    }
+    .login-viewport-min {
+      min-height: var(--app-height);
+    }
+    .app-shell-nav {
+      flex: 0 0 auto;
+      padding-bottom: env(safe-area-inset-bottom);
+    }
 
     :root {
+      --app-height: 100dvh;
       --bg-background: #fbf9fc;
       --bg-surface: #fbf9fc;
       --bg-surface-lowest: #ffffff;
@@ -329,10 +385,30 @@
       transform: scale(0.97);
     }
   </style>
+  <script>
+    (function () {
+      function setAppHeight() {
+        var h =
+          window.visualViewport && window.visualViewport.height > 0
+            ? window.visualViewport.height
+            : window.innerHeight;
+        document.documentElement.style.setProperty("--app-height", h + "px");
+      }
+      setAppHeight();
+      if (window.visualViewport) {
+        window.visualViewport.addEventListener("resize", setAppHeight);
+        window.visualViewport.addEventListener("scroll", setAppHeight);
+      }
+      window.addEventListener("resize", setAppHeight);
+      window.addEventListener("orientationchange", function () {
+        setTimeout(setAppHeight, 300);
+      });
+    })();
+  </script>
 </head>
-<body class="bg-background text-on-background min-h-screen">
-  <main class="mx-auto min-h-screen w-full max-w-[390px] bg-surface shadow-lg">
-    <section id="loginScreen" class="flex min-h-screen flex-col justify-center px-margin-mobile">
+<body class="bg-background text-on-background">
+  <main class="app-viewport-fill mx-auto w-full max-w-[390px] bg-surface shadow-lg">
+    <section id="loginScreen" class="login-viewport-min flex flex-col justify-center overflow-y-auto px-margin-mobile py-stack-md">
       <div class="mb-stack-md flex flex-col items-center gap-stack-sm text-center">
         <div class="mb-stack-sm flex h-16 w-16 items-center justify-center rounded-xl bg-primary-container shadow-sm">
           <span class="material-symbols-rounded text-[40px] text-primary-fixed-dim">restaurant_menu</span>
@@ -366,8 +442,8 @@
       </div>
     </section>
 
-    <section id="appScreen" class="hidden min-h-screen bg-[#F2F2F7] pb-28">
-      <header id="appHeader" class="fixed top-0 z-40 flex h-touch-target-min w-full max-w-[390px] items-center justify-between border-b border-outline-variant bg-surface px-margin-mobile shadow-sm">
+    <section id="appScreen" class="app-shell hidden bg-[#F2F2F7]">
+      <header id="appHeader" class="app-shell-header z-40 mt-2 flex h-touch-target-min items-center justify-between border-b border-outline-variant bg-surface px-margin-mobile shadow-sm">
         <div class="flex items-center gap-stack-sm">
           <span class="material-symbols-rounded text-primary">restaurant_menu</span>
           <div>
@@ -376,23 +452,30 @@
           </div>
         </div>
         <div class="flex items-center gap-2">
-          <button id="openSettingsButton" class="flex h-10 w-10 items-center justify-center rounded-lg border border-outline-variant text-on-surface" title="Configurações">
+          <button id="openSettingsButton" class="flex h-11 w-11 items-center justify-center rounded-lg border border-outline-variant text-on-surface" title="Configurações">
             <span class="material-symbols-rounded text-[20px]">settings</span>
           </button>
-          <button id="logoutButton" class="h-10 rounded-lg border border-outline-variant px-3 text-xs font-bold text-on-surface">Sair</button>
+          <button id="logoutButton" class="h-11 rounded-lg border border-outline-variant px-4 text-sm font-bold text-on-surface">Sair</button>
         </div>
       </header>
 
-      <div id="mainContent" class="px-margin-mobile pt-20">
+      <div id="mainContent" class="app-shell-main px-margin-mobile py-stack-md">
         <section id="dashboardTab" class="tab-panel">
-          <div class="grid grid-cols-2 gap-gutter-md">
-            <article class="rounded-xl border border-outline-variant bg-surface-container-lowest p-4 shadow-[0_2px_8px_rgba(0,0,0,0.05)]">
-              <p class="text-xs font-semibold uppercase text-on-surface-variant">Ativas</p>
-              <p id="activeOrdersCount" class="text-2xl font-extrabold text-primary">0</p>
+          <div class="grid grid-cols-3 gap-2">
+            <article class="rounded-lg border border-outline-variant bg-surface-container-lowest px-2 py-2.5 shadow-[0_1px_4px_rgba(0,0,0,0.04)]">
+              <p class="text-[10px] font-semibold uppercase leading-tight text-on-surface-variant">Vendas</p>
+              <p class="text-[10px] font-semibold uppercase leading-tight text-on-surface-variant">do dia</p>
+              <p id="dailySalesCount" class="mt-1 text-lg font-extrabold leading-none text-primary">0</p>
             </article>
-            <article class="rounded-xl border border-outline-variant bg-surface-container-lowest p-4 shadow-[0_2px_8px_rgba(0,0,0,0.05)]">
-              <p class="text-xs font-semibold uppercase text-on-surface-variant">Total Bruto</p>
-              <p id="dailyRevenueValue" class="text-2xl font-extrabold text-secondary">R$ 0,00</p>
+            <article class="rounded-lg border border-outline-variant bg-surface-container-lowest px-2 py-2.5 shadow-[0_1px_4px_rgba(0,0,0,0.04)]">
+              <p class="text-[10px] font-semibold uppercase leading-tight text-on-surface-variant">A</p>
+              <p class="text-[10px] font-semibold uppercase leading-tight text-on-surface-variant">faturar</p>
+              <p id="activeOrdersCount" class="mt-1 text-lg font-extrabold leading-none text-primary">0</p>
+            </article>
+            <article class="rounded-lg border border-outline-variant bg-surface-container-lowest px-2 py-2.5 shadow-[0_1px_4px_rgba(0,0,0,0.04)]">
+              <p class="text-[10px] font-semibold uppercase leading-tight text-on-surface-variant">Total</p>
+              <p class="text-[10px] font-semibold uppercase leading-tight text-on-surface-variant">bruto</p>
+              <p id="dailyRevenueValue" class="mt-1 truncate text-sm font-extrabold leading-none text-secondary">R$ 0,00</p>
             </article>
           </div>
           <div class="mt-stack-md flex gap-stack-sm">
@@ -400,6 +483,10 @@
             <button data-filter="Aberta" class="status-filter h-touch-target-min flex-1 rounded-full bg-surface-container-high px-3 text-xs font-bold text-on-surface-variant">Abertas</button>
             <button data-filter="Finalizado" class="status-filter h-touch-target-min flex-1 rounded-full bg-surface-container-high px-3 text-xs font-bold text-on-surface-variant">Finalizadas</button>
           </div>
+          <label class="mt-2 block">
+            <span class="mb-1 block text-[10px] font-bold uppercase text-on-surface-variant">Data do dashboard</span>
+            <input id="dashboardDateInput" type="date" class="h-touch-target-min w-full rounded-lg border border-outline-variant bg-surface-container-low px-3 text-sm text-on-surface">
+          </label>
           <button id="newOrderButton" class="mt-stack-md flex h-14 w-full items-center justify-center gap-2 rounded-full bg-primary text-on-primary font-bold shadow-lg transition active:scale-95">
             <span class="material-symbols-rounded">add</span>
             Nova Comanda
@@ -433,7 +520,9 @@
             <button type="button" class="report-type-button col-span-2 rounded-xl border border-outline-variant bg-surface-container-lowest p-3 text-left text-sm font-semibold text-on-surface shadow-sm transition active:scale-[0.98]" data-report="cashClose">Fechamento de caixa</button>
           </div>
           <div id="reportsDetail" class="mt-stack-md hidden rounded-xl border border-outline-variant bg-surface-container-lowest p-4 shadow-sm">
-            <button type="button" id="reportsBackButton" class="mb-3 h-10 rounded-lg border border-outline-variant px-3 text-sm font-bold text-primary">Voltar</button>
+            <div class="mb-3 flex justify-end">
+              <button type="button" id="reportsBackButton" class="h-10 rounded-lg border border-outline-variant px-3 text-sm font-bold text-primary">Voltar</button>
+            </div>
             <div id="reportsDetailBody"></div>
           </div>
         </section>
@@ -501,9 +590,9 @@
 
           <div id="categoriesSettingsPanel" class="settings-panel mt-stack-md hidden rounded-xl border border-outline-variant bg-surface-container-lowest p-4 shadow-sm">
             <p class="text-sm font-bold text-on-surface">Categorias de Produtos</p>
-            <form id="categoryForm" class="mt-2 flex gap-2">
-              <input id="categoryNameInput" type="text" class="h-touch-target-min flex-1 rounded-lg border border-outline-variant bg-surface-container-low px-4" placeholder="Ex: Drinks" required>
-              <button type="submit" class="h-touch-target-min rounded-lg bg-primary px-4 text-sm font-bold text-on-primary">Adicionar</button>
+            <form id="categoryForm" class="mt-2 flex items-center gap-2">
+              <input id="categoryNameInput" type="text" class="h-touch-target-min min-w-0 flex-1 rounded-lg border border-outline-variant bg-surface-container-low px-4" placeholder="Ex: Drinks" required>
+              <button type="submit" class="h-touch-target-min shrink-0 whitespace-nowrap rounded-lg bg-primary px-3 text-sm font-bold text-on-primary sm:px-4">Adicionar</button>
             </form>
             <p id="categoryFeedback" class="mt-2 text-xs text-error"></p>
             <ul id="categoriesList" class="mt-2 space-y-2"></ul>
@@ -511,9 +600,9 @@
 
           <div id="paymentsSettingsPanel" class="settings-panel mt-stack-md hidden rounded-xl border border-outline-variant bg-surface-container-lowest p-4 shadow-sm">
             <p class="text-sm font-bold text-on-surface">Formas de Pagamento</p>
-            <form id="paymentMethodForm" class="mt-2 flex gap-2">
-              <input id="paymentMethodNameInput" type="text" class="h-touch-target-min flex-1 rounded-lg border border-outline-variant bg-surface-container-low px-4" placeholder="Ex: Cartao Alimentacao" required>
-              <button type="submit" class="h-touch-target-min rounded-lg bg-primary px-4 text-sm font-bold text-on-primary">Adicionar</button>
+            <form id="paymentMethodForm" class="mt-2 flex items-center gap-2">
+              <input id="paymentMethodNameInput" type="text" class="h-touch-target-min min-w-0 flex-1 rounded-lg border border-outline-variant bg-surface-container-low px-4" placeholder="Ex: Cartao Alimentacao" required>
+              <button type="submit" class="h-touch-target-min shrink-0 whitespace-nowrap rounded-lg bg-primary px-3 text-sm font-bold text-on-primary sm:px-4">Adicionar</button>
             </form>
             <p id="paymentMethodFeedback" class="mt-2 text-xs text-error"></p>
             <ul id="paymentMethodsSettingsList" class="mt-2 space-y-2"></ul>
@@ -538,8 +627,8 @@
         </section>
       </div>
 
-      <nav id="appBottomNav" class="pointer-events-none fixed bottom-0 z-40 w-full max-w-[390px] px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-2">
-        <div class="pointer-events-auto flex h-[52px] items-stretch gap-1 rounded-2xl border border-outline-variant/70 bg-surface/92 p-1 shadow-[0_4px_24px_rgba(0,0,0,0.08),0_1px_0_rgba(255,255,255,0.6)_inset] backdrop-blur-xl">
+      <nav id="appBottomNav" class="app-shell-nav z-40 w-full border-t border-outline-variant bg-surface">
+        <div class="flex h-[52px] items-stretch gap-1 px-2 py-1">
           <button type="button" id="homeButton" data-tab="dashboardTab" class="bottom-tab bottom-tab--active flex flex-1 items-center justify-center rounded-[0.875rem] bg-primary-container text-on-primary-container transition active:scale-[0.98]" title="Início" aria-label="Início" aria-selected="true">
             <span class="bottom-tab-icon material-symbols-rounded text-[28px] leading-none">space_dashboard</span>
           </button>
@@ -607,7 +696,17 @@
         </label>
         <div class="mt-2">
           <span class="mb-1 block text-xs font-bold uppercase text-on-surface-variant">Categoria</span>
-          <div id="categoryButtons" class="flex gap-2 overflow-x-auto pb-1"></div>
+          <div class="settings-tabs-wrap">
+            <div id="categoryTabsLeftHint" class="settings-tabs-hint settings-tabs-hint-left">
+              <span class="material-symbols-rounded text-[16px] text-on-surface-variant">chevron_left</span>
+            </div>
+            <div id="categoryTabsScroll" class="settings-tabs-scroll">
+              <div id="categoryButtons" class="settings-tabs-scroll flex gap-2 overflow-x-auto pb-1"></div>
+            </div>
+            <div id="categoryTabsRightHint" class="settings-tabs-hint settings-tabs-hint-right">
+              <span class="material-symbols-rounded text-[16px] text-on-surface-variant">chevron_right</span>
+            </div>
+          </div>
         </div>
         <ul id="availableProductsList" class="mt-2 space-y-2"></ul>
       </div>
@@ -621,9 +720,9 @@
         <div id="detailCustomerSection" class="rounded-xl border border-outline-variant bg-surface-container-lowest p-3">
           <p class="text-xs font-bold uppercase text-on-surface-variant">Nome do Cliente (obrigatório)</p>
           <p id="detailCustomerHint" class="mt-1 text-xs text-on-surface-variant"></p>
-          <div class="mt-2 flex gap-2">
-            <input id="detailCustomerInput" type="text" class="h-10 flex-1 rounded-lg border border-outline-variant px-3 text-sm" placeholder="Digite o nome do cliente" required>
-            <button id="saveCustomerButton" class="h-10 rounded-lg bg-primary px-3 text-sm font-bold text-on-primary">Salvar</button>
+          <div class="mt-2 flex flex-wrap gap-2">
+            <input id="detailCustomerInput" type="text" class="h-10 min-w-0 flex-1 rounded-lg border border-outline-variant px-3 text-sm" placeholder="Digite o nome do cliente" required>
+            <button id="saveCustomerButton" class="h-10 w-full rounded-lg bg-primary px-3 text-sm font-bold text-on-primary sm:w-auto sm:shrink-0">Salvar</button>
           </div>
           <p id="detailCustomerFeedback" class="mt-2 text-xs text-error"></p>
         </div>
@@ -649,6 +748,16 @@
       </label>
       <button id="confirmCheckoutButton" class="mt-stack-sm h-touch-target-min w-full rounded-xl bg-primary text-base font-bold text-on-primary">Finalizar Comanda</button>
       <p id="checkoutFeedback" class="mt-2 text-sm text-error"></p>
+    </div>
+  </section>
+
+  <section id="cashCloseHistoryDialog" class="fixed inset-x-0 top-0 z-50 mx-auto hidden h-screen w-full max-w-[390px] overflow-auto bg-[#F2F2F7] px-margin-mobile pb-24 pt-4">
+    <div class="rounded-xl border border-outline-variant bg-surface-container-lowest p-4 shadow-sm">
+      <div class="mb-stack-sm flex items-center justify-between gap-2">
+        <h3 class="text-lg font-extrabold text-primary">Historico de Fechamentos</h3>
+        <button id="closeCashCloseHistoryButton" class="h-10 rounded-lg border border-outline px-3 text-sm font-bold">Fechar</button>
+      </div>
+      <div id="cashCloseHistoryBody"></div>
     </div>
   </section>
 

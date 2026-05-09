@@ -24,12 +24,17 @@ const API_BASE =
     ? `${window.location.protocol}//${window.location.hostname}:3001`
     : "http://localhost:3001";
 /** Build tag visivel para confirmar JS atual no celular. Erros vao para o console (Eruda no mobile). */
-const APP_BUILD_TAG = "build-2026-05-09T08:46-badge-only";
+const APP_BUILD_TAG = "build-2026-05-09T09:35-reports-voltar-right";
+const IS_STANDALONE =
+  typeof window !== "undefined" &&
+  ((window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) ||
+    window.navigator.standalone === true);
 function debugLog(message) {
   try { console.log("[JANA]", message); } catch (_) {}
 }
 function mountBuildBadge() {
   if (document.getElementById("__buildBadge")) return;
+  if (IS_STANDALONE) return;
   const tag = document.createElement("div");
   tag.id = "__buildBadge";
   tag.textContent = APP_BUILD_TAG;
@@ -72,10 +77,14 @@ const state = {
   currentView: "main",
   pendingNewOrder: null,
   selectedReport: null,
+  dashboardDateYmd: "",
   reportDateFrom: "",
   reportDateTo: "",
   cashCloseDateYmd: "",
   cashCloseUiMessage: null,
+  cashClosePendingSaveYmd: null,
+  cashClosePendingRollbackYmd: null,
+  cashCloseHistoryExpandedId: null,
   config: {
     id: 1,
     useTables: false,
@@ -126,6 +135,8 @@ const refs = {
   currentUserLabel: document.querySelector("#currentUserLabel"),
   openSettingsButton: document.querySelector("#openSettingsButton"),
   logoutButton: document.querySelector("#logoutButton"),
+  dashboardDateInput: document.querySelector("#dashboardDateInput"),
+  dailySalesCount: document.querySelector("#dailySalesCount"),
   activeOrdersCount: document.querySelector("#activeOrdersCount"),
   dailyRevenueValue: document.querySelector("#dailyRevenueValue"),
   ordersList: document.querySelector("#ordersList"),
@@ -156,6 +167,9 @@ const refs = {
   confirmCancelOrderButton: document.querySelector("#confirmCancelOrderButton"),
   dismissCancelOrderButton: document.querySelector("#dismissCancelOrderButton"),
   productSearchInput: document.querySelector("#productSearchInput"),
+  categoryTabsScroll: document.querySelector("#categoryTabsScroll"),
+  categoryTabsLeftHint: document.querySelector("#categoryTabsLeftHint"),
+  categoryTabsRightHint: document.querySelector("#categoryTabsRightHint"),
   categoryButtons: document.querySelector("#categoryButtons"),
   availableProductsList: document.querySelector("#availableProductsList"),
   orderItemsList: document.querySelector("#orderItemsList"),
@@ -169,6 +183,9 @@ const refs = {
   serviceFeeInput: document.querySelector("#serviceFeeInput"),
   confirmCheckoutButton: document.querySelector("#confirmCheckoutButton"),
   checkoutFeedback: document.querySelector("#checkoutFeedback"),
+  cashCloseHistoryDialog: document.querySelector("#cashCloseHistoryDialog"),
+  closeCashCloseHistoryButton: document.querySelector("#closeCashCloseHistoryButton"),
+  cashCloseHistoryBody: document.querySelector("#cashCloseHistoryBody"),
   productForm: document.querySelector("#productForm"),
   productIdInput: document.querySelector("#productIdInput"),
   productSubmitButton: document.querySelector("#productSubmitButton"),
@@ -329,12 +346,26 @@ function getLastDailyCloseIso(dateYmd) {
 function computeCashCloseDraft(dateYmd) {
   const orders = loadOrders();
   const today = todayLocalYmd();
-  const slice = finalizedOrdersInLocalDateRange(orders, dateYmd, dateYmd);
+  const lastCloseIso = getLastDailyCloseIso(dateYmd);
+  const slice = finalizedOrdersInLocalDateRange(orders, dateYmd, dateYmd).filter((order) => {
+    if (!lastCloseIso) return true;
+    const closeIso = order.closedAt || order.createdAt;
+    if (!closeIso) return false;
+    return new Date(closeIso).getTime() > new Date(lastCloseIso).getTime();
+  });
   const totalBruto = slice.reduce((s, o) => s + (o.totalPaid || 0), 0);
   const finalizedOrdersCount = slice.length;
+  const sales = slice.map((order) => ({
+    orderId: order.id,
+    customer: (order.customer || "").trim() || "Cliente sem nome",
+    totalPaid: order.totalPaid || 0,
+    paymentMethods: Array.isArray(order.paymentMethods) ? order.paymentMethods : [],
+    itemsCount: (order.items || []).reduce((sum, item) => sum + (item.qty || 0), 0),
+    closedAt: order.closedAt || order.createdAt || null
+  }));
   const activeOrdersCount =
     dateYmd === today ? orders.filter((o) => normalizeOrderStatus(o.status) === "Aberta").length : null;
-  return { dateYmd, activeOrdersCount, totalBruto, finalizedOrdersCount };
+  return { dateYmd, activeOrdersCount, totalBruto, finalizedOrdersCount, sales };
 }
 
 async function persistDailyClose(draft) {
@@ -345,19 +376,92 @@ async function persistDailyClose(draft) {
     closedAt,
     activeOrdersCount: draft.activeOrdersCount,
     totalBruto: draft.totalBruto,
-    finalizedOrdersCount: draft.finalizedOrdersCount
+    finalizedOrdersCount: draft.finalizedOrdersCount,
+    sales: Array.isArray(draft.sales) ? draft.sales : []
   };
-  const existing = list.find((e) => String(e.dateYmd) === String(draft.dateYmd));
-  let saved;
-  if (existing && existing.id != null && existing.id !== "") {
-    saved = await apiPatch(`/dailyCloses/${existing.id}`, payload);
-    const idx = list.findIndex((e) => String(e.id) === String(existing.id));
-    if (idx >= 0) list[idx] = saved;
-  } else {
-    saved = await apiPost("/dailyCloses", payload);
-    list.unshift(saved);
-  }
+  const saved = await apiPost("/dailyCloses", payload);
+  list.unshift(saved);
   state.cache.dailyCloses = list;
+}
+
+async function rollbackLastDailyClose(dateYmd) {
+  const list = [...loadDailyCloses()];
+  const target = list
+    .filter((entry) => String(entry.dateYmd) === String(dateYmd) && entry.id != null && entry.id !== "")
+    .sort(
+      (a, b) =>
+        new Date(b.closedAt || `${b.dateYmd || ""}T00:00:00`).getTime() -
+        new Date(a.closedAt || `${a.dateYmd || ""}T00:00:00`).getTime()
+    )[0];
+  if (!target) return false;
+  await apiDelete(`/dailyCloses/${target.id}`);
+  state.cache.dailyCloses = list.filter((entry) => String(entry.id) !== String(target.id));
+  return true;
+}
+
+function renderCashCloseHistoryOverlay() {
+  if (!refs.cashCloseHistoryBody) return;
+  const history = [...loadDailyCloses()].sort(
+    (a, b) =>
+      new Date(b.closedAt || `${b.dateYmd || ""}T00:00:00`).getTime() -
+      new Date(a.closedAt || `${a.dateYmd || ""}T00:00:00`).getTime()
+  );
+  refs.cashCloseHistoryBody.innerHTML = history.length
+    ? `<ul class="space-y-2">
+        ${history
+          .map((row) => {
+            const sales = Array.isArray(row.sales) ? row.sales : [];
+            const rowId = String(row.id || `${row.dateYmd || ""}-${row.closedAt || ""}`);
+            const isExpanded = state.cashCloseHistoryExpandedId === rowId;
+            return `
+          <li class="rounded-lg border border-outline-variant px-3 py-2 text-xs">
+            <button type="button" class="cash-close-history-toggle w-full text-left" data-close-id="${rowId}">
+              <div class="flex items-start justify-between gap-2">
+                <div class="min-w-0">
+                  <p class="font-semibold text-on-surface">${row.dateYmd}</p>
+                  <p class="text-on-surface-variant">Ativas: ${row.activeOrdersCount != null ? row.activeOrdersCount : "—"} • Bruto: ${formatCurrency(row.totalBruto || 0)} • ${row.finalizedOrdersCount ?? 0} fin.</p>
+                  <p class="text-[10px] text-on-surface-variant">${row.closedAt ? new Date(row.closedAt).toLocaleString("pt-BR") : ""}</p>
+                </div>
+                <span class="text-[10px] font-bold uppercase ${isExpanded ? "text-primary" : "text-on-surface-variant"}">${isExpanded ? "Ocultar" : "Ver"}</span>
+              </div>
+            </button>
+            ${
+              isExpanded
+                ? `<div class="mt-2 rounded-md bg-surface-container-low px-2 py-2">
+                    <p class="text-[10px] font-semibold uppercase text-on-surface-variant">Vendas deste fechamento</p>
+                    ${sales.length
+                      ? `
+                        <ul class="mt-1 space-y-1">
+                          ${sales
+                            .map(
+                              (sale) => `
+                            <li class="rounded border border-outline-variant px-2 py-1">
+                              <p class="font-semibold text-on-surface">${sale.customer || "Cliente sem nome"} • ${formatCurrency(sale.totalPaid || 0)}</p>
+                              <p class="text-[10px] text-on-surface-variant">Itens: ${sale.itemsCount ?? 0} • Pagamento: ${(sale.paymentMethods || []).join(", ") || "Nao informado"}</p>
+                            </li>`
+                            )
+                            .join("")}
+                        </ul>`
+                      : "<p class='mt-1 text-[10px] text-on-surface-variant'>Sem detalhes de vendas neste fechamento.</p>"}
+                  </div>`
+                : ""
+            }
+          </li>`;
+          })
+          .join("")}
+      </ul>`
+    : "<p class='text-sm text-on-surface-variant'>Nenhum fechamento salvo ainda.</p>";
+}
+
+function openCashCloseHistoryDialog() {
+  if (!refs.cashCloseHistoryDialog) return;
+  state.cashCloseHistoryExpandedId = null;
+  renderCashCloseHistoryOverlay();
+  refs.cashCloseHistoryDialog.classList.remove("hidden");
+}
+
+function closeCashCloseHistoryDialog() {
+  refs.cashCloseHistoryDialog?.classList.add("hidden");
 }
 
 function loadConfig() {
@@ -405,6 +509,18 @@ function updateSettingsTabsHints() {
   const showRight = hasOverflow && scroller.scrollLeft < (maxScrollLeft - 4);
   refs.settingsTabsLeftHint.classList.toggle("show", showLeft);
   refs.settingsTabsRightHint.classList.toggle("show", showRight);
+}
+
+function updateCategoryTabsHints() {
+  if (!refs.categoryTabsScroll || !refs.categoryTabsLeftHint || !refs.categoryTabsRightHint) return;
+  const content = refs.categoryButtons;
+  if (!content) return;
+  const maxScrollLeft = Math.max(0, content.scrollWidth - content.clientWidth);
+  const hasOverflow = maxScrollLeft > 2;
+  const showLeft = hasOverflow && content.scrollLeft > 4;
+  const showRight = hasOverflow && content.scrollLeft < (maxScrollLeft - 4);
+  refs.categoryTabsLeftHint.classList.toggle("show", showLeft);
+  refs.categoryTabsRightHint.classList.toggle("show", showRight);
 }
 
 function isPendingLocalOrder() {
@@ -650,7 +766,7 @@ function markLineDelivered(lineId) {
   const status = normalizeOrderStatus(order.status);
   if (status !== "Aberta") return;
   const item = order.items.find((entry) => String(entry.lineId) === String(lineId));
-  if (!item || item.deliveredAt) return;
+  if (!item || item.deliveredAt || !item.requiresPrep) return;
   item.deliveredAt = new Date().toISOString();
   item.serviceSeconds = computeServiceSeconds(item.requestedAt, item.deliveredAt);
 
@@ -865,19 +981,25 @@ function renderAuth() {
 function renderDashboard() {
   const orders = loadOrders();
   const today = todayLocalYmd();
-  const lastCloseIso = getLastDailyCloseIso(today);
-  const active = orders.filter((order) => {
-    if (normalizeOrderStatus(order.status) !== "Aberta") return false;
-    if (!lastCloseIso) return true;
-    const createdIso = order.createdAt;
-    if (!createdIso) return false;
-    return new Date(createdIso).getTime() > new Date(lastCloseIso).getTime();
-  });
+  const refYmd = state.dashboardDateYmd || today;
+  if (refs.dashboardDateInput && refs.dashboardDateInput.value !== refYmd) {
+    refs.dashboardDateInput.value = refYmd;
+  }
+  const orderDashboardYmd = (order) => {
+    const st = normalizeOrderStatus(order.status);
+    if (st === "Finalizado") return localYmdFromIso(order.closedAt || order.createdAt);
+    if (st === "Cancelada") return localYmdFromIso(order.canceledAt || order.createdAt);
+    return localYmdFromIso(order.createdAt);
+  };
+  const scopedOrders = orders.filter((order) => orderDashboardYmd(order) === refYmd);
+  const dailyFinalizedOrders = finalizedOrdersInLocalDateRange(orders, refYmd, refYmd);
+  const active = scopedOrders.filter((order) => normalizeOrderStatus(order.status) === "Aberta");
 
+  if (refs.dailySalesCount) refs.dailySalesCount.textContent = String(dailyFinalizedOrders.length);
   refs.activeOrdersCount.textContent = String(active.length);
-  refs.dailyRevenueValue.textContent = formatCurrency(calculatePaidToday(orders));
+  refs.dailyRevenueValue.textContent = formatCurrency(calculatePaidInDateRange(orders, refYmd, refYmd));
 
-  const filtered = orders.filter((order) => {
+  const filtered = scopedOrders.filter((order) => {
     if (state.selectedFilter === "all") return true;
     return normalizeOrderStatus(order.status) === state.selectedFilter;
   });
@@ -1115,7 +1237,12 @@ function renderProductAdmin() {
 
 function renderCategoryOptions() {
   if (!refs.categoryButtons) return;
-  const categories = ["Todas", ...new Set(loadProducts().map((product) => product.category))];
+  const configuredCategories = (state.config.categories || []).filter(Boolean);
+  const productCategories = loadProducts().map((product) => product.category).filter(Boolean);
+  const categories = ["Todas", ...new Set([...configuredCategories, ...productCategories])];
+  if (!categories.includes(state.selectedCategory)) {
+    state.selectedCategory = "Todas";
+  }
   refs.categoryButtons.innerHTML = categories
     .map((category) => `
       <button class="category-filter-button h-10 whitespace-nowrap rounded-full px-3 text-xs font-bold ${category === state.selectedCategory ? "bg-primary-container text-on-primary-container" : "bg-surface-container-high text-on-surface-variant"}" data-category="${category}">
@@ -1130,6 +1257,7 @@ function renderCategoryOptions() {
       renderOrderDetails();
     });
   });
+  updateCategoryTabsHints();
 }
 
 function renderOrderDetails() {
@@ -1212,7 +1340,7 @@ function renderOrderDetails() {
             : item.deliveredAt
               ? `Entregue ${formatTimeShort(item.deliveredAt)}`
               : "";
-        const showDeliverBtn = !isLocked && item.requestedAt && !item.deliveredAt;
+        const showDeliverBtn = !isLocked && item.requiresPrep && item.requestedAt && !item.deliveredAt;
         const lineIdAttr = item.lineId ? ` data-line-id="${item.lineId}"` : "";
         return `
         <li class="rounded-xl border border-slate-200 p-2">
@@ -1258,22 +1386,12 @@ function renderOrderDetails() {
   document.querySelectorAll(".add-product-button").forEach((button) => {
     if (button.dataset.bound === "1") return;
     button.dataset.bound = "1";
-    let actedAt = 0;
-    const fire = (source) => {
-      const now = Date.now();
-      if (now - actedAt < 350) {
-        debugLog(`add ignorado (${source} duplicado)`);
-        return;
-      }
-      actedAt = now;
-      debugLog(`add disparado por ${source} pid=${button.dataset.productId}`);
-      void addItemToOrder(button.dataset.productId);
+    const fire = () => {
+      const productId = String(button.dataset.productId || "");
+      debugLog(`add disparado pid=${productId}`);
+      void addItemToOrder(productId);
     };
-    button.addEventListener("pointerup", (e) => {
-      if (e.pointerType === "mouse" && e.button !== 0) return;
-      fire(`pointerup/${e.pointerType || "?"}`);
-    });
-    button.addEventListener("click", () => fire("click"));
+    button.addEventListener("click", fire);
   });
 
   document.querySelectorAll(".qty-plus").forEach((button) => {
@@ -1489,19 +1607,20 @@ function renderReports() {
     const uiMsg = state.cashCloseUiMessage;
     state.cashCloseUiMessage = null;
     const refYmd = state.cashCloseDateYmd || today;
+    const savePending = state.cashClosePendingSaveYmd === refYmd;
+    const rollbackPending = state.cashClosePendingRollbackYmd === refYmd;
     const draft = computeCashCloseDraft(refYmd);
     const ativasLabel =
       draft.activeOrdersCount != null ? String(draft.activeOrdersCount) : "— (so no dia de hoje)";
-    const history = [...loadDailyCloses()].sort((a, b) => String(b.dateYmd).localeCompare(String(a.dateYmd)));
     body = `
-      <p class="text-xs text-on-surface-variant">Registra o mesmo resumo do Inicio para a data escolhida: comandas <strong>abertas</strong> (somente se a data for hoje) e <strong>total bruto</strong> (soma das finalizadas na data).</p>
+      <p class="text-xs text-on-surface-variant">Registra o mesmo resumo do Inicio para a data escolhida: comandas <strong>abertas</strong> (somente se a data for hoje) e <strong>total bruto</strong> (somente das comandas finalizadas desde o ultimo fechamento dessa data).</p>
       <label class="mt-3 block">
         <span class="mb-1 block text-xs font-bold uppercase text-on-surface-variant">Data de referencia</span>
         <input id="cashCloseDateInput" type="date" class="h-touch-target-min w-full rounded-lg border border-outline-variant bg-surface-container-low px-3 text-sm" value="${refYmd}">
       </label>
       <div class="mt-stack-md grid grid-cols-2 gap-2">
         <div class="rounded-lg border border-outline-variant bg-surface-container-low px-3 py-2">
-          <p class="text-[10px] font-semibold uppercase text-on-surface-variant">Ativas (agora)</p>
+          <p class="text-[10px] font-semibold uppercase text-on-surface-variant">Em aberto</p>
           <p class="text-xl font-extrabold text-primary">${ativasLabel}</p>
         </div>
         <div class="rounded-lg border border-outline-variant bg-surface-container-low px-3 py-2">
@@ -1509,26 +1628,13 @@ function renderReports() {
           <p class="text-xl font-extrabold text-secondary">${formatCurrency(draft.totalBruto)}</p>
         </div>
       </div>
-      <p class="mt-2 text-xs text-on-surface-variant">${draft.finalizedOrdersCount} comanda(s) finalizada(s) nesta data.</p>
-      <button type="button" id="saveCashCloseButton" class="mt-stack-md h-touch-target-min w-full rounded-xl bg-primary text-sm font-bold text-on-primary">Salvar fechamento</button>
-      <p id="cashCloseFeedback" class="mt-2 min-h-[1rem] text-xs ${uiMsg?.type === "err" ? "text-error" : uiMsg?.type === "ok" ? "text-secondary" : "text-on-surface-variant"}">${uiMsg?.text || ""}</p>
-      <div class="mt-stack-md border-t border-outline-variant pt-3">
-        <p class="text-xs font-bold uppercase text-on-surface-variant">Historico salvo</p>
-        <ul class="mt-2 max-h-48 space-y-2 overflow-y-auto">
-          ${history.length
-            ? history
-              .map(
-                (row) => `
-            <li class="rounded-lg border border-outline-variant px-3 py-2 text-xs">
-              <p class="font-semibold text-on-surface">${row.dateYmd}</p>
-              <p class="text-on-surface-variant">Ativas: ${row.activeOrdersCount != null ? row.activeOrdersCount : "—"} • Bruto: ${formatCurrency(row.totalBruto || 0)} • ${row.finalizedOrdersCount ?? 0} fin.</p>
-              <p class="text-[10px] text-on-surface-variant">${row.closedAt ? new Date(row.closedAt).toLocaleString("pt-BR") : ""}</p>
-            </li>`
-              )
-              .join("")
-            : "<li class='text-sm text-on-surface-variant'>Nenhum fechamento salvo ainda.</li>"}
-        </ul>
+      <p class="mt-2 text-xs text-on-surface-variant">${draft.finalizedOrdersCount} comanda(s) finalizada(s) no periodo deste fechamento.</p>
+      <div class="mt-stack-md grid grid-cols-1 gap-2 sm:grid-cols-2">
+        <button type="button" id="saveCashCloseButton" class="h-touch-target-min w-full rounded-xl text-sm font-bold ${savePending ? "bg-secondary text-on-secondary" : "bg-primary text-on-primary"}">${savePending ? "Confirmar salvamento" : "Salvar fechamento"}</button>
+        <button type="button" id="rollbackCashCloseButton" class="h-touch-target-min w-full rounded-xl border text-sm font-bold ${rollbackPending ? "border-error bg-error text-on-error" : "border-outline-variant bg-surface-container-low text-on-surface"}">${rollbackPending ? "Confirmar estorno" : "Estornar ultimo fechamento"}</button>
       </div>
+      <button type="button" id="openCashCloseHistoryButton" class="mt-2 h-touch-target-min w-full rounded-xl border border-outline-variant bg-surface-container-low text-sm font-bold text-on-surface">Ver historico de fechamentos</button>
+      <p id="cashCloseFeedback" class="mt-2 min-h-[1rem] text-xs ${uiMsg?.type === "err" ? "text-error" : uiMsg?.type === "ok" ? "text-secondary" : uiMsg?.type === "warn" ? "text-primary" : "text-on-surface-variant"}">${uiMsg?.text || ""}</p>
     `;
   } else {
     body = "<p class='text-sm text-on-surface-variant'>Selecione um tipo na lista.</p>";
@@ -1741,7 +1847,6 @@ function fillProductForm(productId) {
   refs.productRequiresPrepInput.checked = product.requiresPrep ?? categoryRequiresPrep(product.category);
   refs.productSubmitButton.textContent = "Atualizar";
   refs.productNameInput.scrollIntoView({ behavior: "smooth", block: "center" });
-  refs.productNameInput.focus();
 }
 
 function clearProductForm() {
@@ -1808,7 +1913,12 @@ function bindAddProductListInteractionsOnce() {
   document.addEventListener("pointercancel", releaseAddProductPress);
 }
 
+function bindDetailCustomerViewportAssistOnce() {
+  // Intencionalmente sem ajuste: deixa o navegador/sistema lidar com teclado virtual.
+}
+
 function bindEvents() {
+  bindDetailCustomerViewportAssistOnce();
   refs.loginForm.addEventListener("submit", (event) => {
     event.preventDefault();
     refs.loginFeedback.textContent = "";
@@ -1867,6 +1977,10 @@ function bindEvents() {
       renderDashboard();
     });
   });
+  refs.dashboardDateInput?.addEventListener("change", () => {
+    state.dashboardDateYmd = refs.dashboardDateInput.value || todayLocalYmd();
+    renderDashboard();
+  });
 
   refs.newOrderButton.addEventListener("click", createNewOrderAndOpen);
   refs.closeOrderDialogButton.addEventListener("click", () => refs.orderDialog.close());
@@ -1905,22 +2019,70 @@ function bindEvents() {
     refs.reportsDetail.addEventListener("change", (e) => {
       if (e.target.id !== "cashCloseDateInput") return;
       state.cashCloseDateYmd = e.target.value || todayLocalYmd();
+      state.cashClosePendingSaveYmd = null;
+      state.cashClosePendingRollbackYmd = null;
       renderReports();
     });
     refs.reportsDetail.addEventListener("click", (e) => {
-      if (e.target.id !== "saveCashCloseButton") return;
+      const button = e.target.closest("button");
+      if (!button) return;
+      if (button.id === "openCashCloseHistoryButton") {
+        e.preventDefault();
+        openCashCloseHistoryDialog();
+        return;
+      }
+      const isSave = button.id === "saveCashCloseButton";
+      const isRollback = button.id === "rollbackCashCloseButton";
+      if (!isSave && !isRollback) return;
       e.preventDefault();
       const ymd = document.getElementById("cashCloseDateInput")?.value || todayLocalYmd();
       void (async () => {
         try {
-          await persistDailyClose(computeCashCloseDraft(ymd));
-          state.cashCloseUiMessage = { type: "ok", text: "Fechamento salvo." };
+          if (isSave) {
+            if (state.cashClosePendingSaveYmd !== ymd) {
+              state.cashClosePendingSaveYmd = ymd;
+              state.cashClosePendingRollbackYmd = null;
+              state.cashCloseUiMessage = {
+                type: "warn",
+                text: 'Clique novamente em "Confirmar salvamento" para salvar este fechamento.'
+              };
+              renderReports();
+              return;
+            }
+            await persistDailyClose(computeCashCloseDraft(ymd));
+            state.cashClosePendingSaveYmd = null;
+            state.cashClosePendingRollbackYmd = null;
+            state.cashCloseUiMessage = { type: "ok", text: "Fechamento salvo." };
+          } else {
+            if (state.cashClosePendingRollbackYmd !== ymd) {
+              state.cashClosePendingRollbackYmd = ymd;
+              state.cashClosePendingSaveYmd = null;
+              state.cashCloseUiMessage = {
+                type: "warn",
+                text: 'Clique novamente em "Confirmar estorno" para remover o ultimo fechamento.'
+              };
+              renderReports();
+              return;
+            }
+            const removed = await rollbackLastDailyClose(ymd);
+            state.cashClosePendingRollbackYmd = null;
+            state.cashCloseUiMessage = removed
+              ? { type: "ok", text: "Ultimo fechamento estornado." }
+              : { type: "err", text: "Nao ha fechamento para estornar nessa data." };
+          }
           renderDashboard();
           renderReports();
+          if (!refs.cashCloseHistoryDialog?.classList.contains("hidden")) {
+            renderCashCloseHistoryOverlay();
+          }
         } catch (_) {
+          if (isSave) state.cashClosePendingSaveYmd = null;
+          if (isRollback) state.cashClosePendingRollbackYmd = null;
           state.cashCloseUiMessage = {
             type: "err",
-            text: "Nao foi possivel salvar. Verifique se o json-server tem dailyCloses no db.json."
+            text: isSave
+              ? "Nao foi possivel salvar. Verifique se o json-server tem dailyCloses no db.json."
+              : "Nao foi possivel estornar. Verifique se o json-server tem dailyCloses no db.json."
           };
           renderReports();
         }
@@ -1943,7 +2105,9 @@ function bindEvents() {
   });
 
   refs.settingsTabsScroll?.addEventListener("scroll", updateSettingsTabsHints);
+  refs.categoryButtons?.addEventListener("scroll", updateCategoryTabsHints);
   window.addEventListener("resize", updateSettingsTabsHints);
+  window.addEventListener("resize", updateCategoryTabsHints);
 
   refs.closeDetailDialogButton.addEventListener("click", () => {
     state.currentView = "main";
@@ -2086,6 +2250,15 @@ function bindEvents() {
   refs.closeCheckoutDialogButton.addEventListener("click", () => {
     state.currentView = "detail";
     renderView();
+  });
+  refs.closeCashCloseHistoryButton?.addEventListener("click", closeCashCloseHistoryDialog);
+  refs.cashCloseHistoryBody?.addEventListener("click", (e) => {
+    const button = e.target.closest(".cash-close-history-toggle");
+    if (!button) return;
+    const id = String(button.dataset.closeId || "");
+    if (!id) return;
+    state.cashCloseHistoryExpandedId = state.cashCloseHistoryExpandedId === id ? null : id;
+    renderCashCloseHistoryOverlay();
   });
   refs.serviceFeeInput.addEventListener("input", renderCheckoutSummary);
 
@@ -2232,6 +2405,70 @@ function bindEvents() {
   bindAddProductListInteractionsOnce();
 }
 
+/** iOS Safari ainda dispara double-tap zoom mesmo com viewport maximum-scale=1. Bloqueia. */
+function bindIosDoubleTapBlocker() {
+  let lastTouchEnd = 0;
+  document.addEventListener(
+    "touchend",
+    (e) => {
+      const now = Date.now();
+      if (now - lastTouchEnd < 350) e.preventDefault();
+      lastTouchEnd = now;
+    },
+    { passive: false }
+  );
+  document.addEventListener("gesturestart", (e) => e.preventDefault());
+}
+
+/**
+ * Pull-to-refresh: Safari (e outros) so recarregam a pagina ao overscroll do documento.
+ * Com body overflow:hidden e scroll so em #mainContent, o gesto nativo some — simulamos aqui.
+ */
+function bindPullToRefresh(scroller) {
+  const el = scroller;
+  if (!el || el.dataset.pullRefreshBound === "1") return;
+  el.dataset.pullRefreshBound = "1";
+  let startY = 0;
+  let tracking = false;
+  let maxPull = 0;
+  el.addEventListener(
+    "touchstart",
+    (e) => {
+      if (el.scrollTop > 2) {
+        tracking = false;
+        return;
+      }
+      tracking = true;
+      startY = e.touches[0].clientY;
+      maxPull = 0;
+    },
+    { passive: true }
+  );
+  el.addEventListener(
+    "touchmove",
+    (e) => {
+      if (!tracking) return;
+      if (el.scrollTop > 2) {
+        tracking = false;
+        return;
+      }
+      const y = e.touches[0].clientY;
+      const delta = y - startY;
+      if (delta > 0) maxPull = Math.max(maxPull, delta);
+    },
+    { passive: true }
+  );
+  el.addEventListener(
+    "touchend",
+    () => {
+      if (tracking && maxPull >= 72) window.location.reload();
+      tracking = false;
+      maxPull = 0;
+    },
+    { passive: true }
+  );
+}
+
 async function init() {
   try {
     await bootstrapFromApi();
@@ -2242,6 +2479,9 @@ async function init() {
     state.cashCloseDateYmd = t;
     applyTheme();
     bindEvents();
+    bindIosDoubleTapBlocker();
+    bindPullToRefresh(refs.mainContent);
+    bindPullToRefresh(refs.loginScreen);
     renderAuth();
   } catch (error) {
     refs.loginFeedback.textContent = "Nao foi possivel conectar na API local (json-server).";
