@@ -192,6 +192,31 @@ async function bootstrapFromSupabase(session) {
   });
 }
 
+/** Carrega dados e UI após sessão válida (reload com sessão ou login explícito). */
+async function applySupabaseSession(session) {
+  if (!session?.user) {
+    renderAuth();
+    return;
+  }
+  try {
+    await bootstrapFromSupabase(session);
+    state.config = loadConfig();
+    applyTheme();
+    renderAuth();
+  } catch (e) {
+    console.error("[JANA] applySupabaseSession", e);
+    const detail =
+      (e && typeof e === "object" && e.message) ||
+      (e && typeof e === "object" && e.details) ||
+      String(e || "");
+    refs.loginFeedback.textContent =
+      detail && detail.length < 280
+        ? `Erro ao carregar dados: ${detail}`
+        : "Erro ao carregar dados. Abra o console (F12). Se aparecer permission denied (403), rode supabase/migrations/002_api_grants.sql no SQL Editor.";
+    renderAuth();
+  }
+}
+
 async function upsertProductRemote(product) {
   const sb = await getSupabase();
   if (!sb) return;
@@ -2243,12 +2268,18 @@ function bindEvents() {
           refs.loginFeedback.textContent = "Supabase nao inicializado.";
           return;
         }
-        const { error } = await sb.auth.signInWithPassword({ email, password });
+        const { data: signData, error } = await sb.auth.signInWithPassword({ email, password });
         if (error) {
           refs.loginFeedback.textContent = error.message || "Credenciais invalidas.";
           return;
         }
         refs.loginForm.reset();
+        if (signData.session) {
+          await applySupabaseSession(signData.session);
+        } else {
+          refs.loginFeedback.textContent = "Login ok mas sessao vazia. Atualize a pagina.";
+          console.warn("[JANA] signInWithPassword sem session no retorno");
+        }
       } catch (e) {
         console.error(e);
         refs.loginFeedback.textContent = "Falha no login.";
@@ -2851,28 +2882,12 @@ async function init() {
       const supabase = await getSupabase();
       if (!supabase) throw new Error("client");
       supabase.auth.onAuthStateChange(async (event, session) => {
-        if (event === "INITIAL_SESSION" || event === "SIGNED_IN") {
+        if (event === "INITIAL_SESSION") {
           if (!session) {
             renderAuth();
             return;
           }
-          try {
-            await bootstrapFromSupabase(session);
-            state.config = loadConfig();
-            applyTheme();
-            renderAuth();
-          } catch (e) {
-            console.error(e);
-            const detail =
-              (e && typeof e === "object" && e.message) ||
-              (e && typeof e === "object" && e.details) ||
-              String(e || "");
-            refs.loginFeedback.textContent =
-              detail && detail.length < 280
-                ? `Erro ao carregar dados: ${detail}`
-                : "Erro ao carregar dados. Abra o console (F12). Se aparecer permission denied (403), rode supabase/migrations/002_api_grants.sql no SQL Editor.";
-            renderAuth();
-          }
+          await applySupabaseSession(session);
           return;
         }
         if (event === "SIGNED_OUT") {
