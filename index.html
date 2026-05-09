@@ -1,8 +1,10 @@
 <!DOCTYPE html>
 <html class="light" lang="pt-BR">
+
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="viewport"
+    content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
@@ -12,11 +14,15 @@
   <meta name="apple-mobile-web-app-title" content="Service Mode">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="format-detection" content="telephone=no">
-  <link rel="apple-touch-icon" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'><rect width='180' height='180' rx='40' fill='%23000e24'/><text x='50%25' y='58%25' text-anchor='middle' font-family='Helvetica' font-weight='800' font-size='100' fill='%23d6e3ff'>SM</text></svg>">
-  <title>Service Mode - Gestao de Comandas</title>
+  <link rel="apple-touch-icon"
+    href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'><rect width='180' height='180' rx='40' fill='%23000e24'/><text x='50%25' y='58%25' text-anchor='middle' font-family='Helvetica' font-weight='800' font-size='100' fill='%23d6e3ff'>SM</text></svg>">
+  <title>Gestao de Comandas</title>
   <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,300..700,0..1,-50..200&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700;800&display=swap"
+    rel="stylesheet">
+  <link
+    href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,300..700,0..1,-50..200&display=swap"
+    rel="stylesheet">
   <script>
     tailwind.config = {
       darkMode: "class",
@@ -93,14 +99,18 @@
       font-family: "Material Symbols Rounded";
       font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24;
     }
+
     .bottom-tab--active .bottom-tab-icon {
       font-variation-settings: "FILL" 1, "wght" 500, "GRAD" 0, "opsz" 24;
     }
-    html, body {
+
+    html,
+    body {
       height: 100%;
       overflow: hidden;
       overscroll-behavior: none;
     }
+
     body {
       font-family: "Hanken Grotesk", sans-serif;
       -webkit-font-smoothing: antialiased;
@@ -109,13 +119,27 @@
       text-size-adjust: 100%;
       -webkit-text-size-adjust: 100%;
     }
+
     /* iOS faz zoom automatico em inputs com font-size < 16px. */
-    input, select, textarea {
+    input,
+    select,
+    textarea {
       font-size: 16px !important;
     }
+
     /* Permite selecao apenas onde faz sentido. */
-    input, textarea, [contenteditable="true"] { -webkit-user-select: text; user-select: text; }
-    button { -webkit-user-select: none; user-select: none; }
+    input,
+    textarea,
+    [contenteditable="true"] {
+      -webkit-user-select: text;
+      user-select: text;
+    }
+
+    button {
+      -webkit-user-select: none;
+      user-select: none;
+    }
+
     /* App shell: o shell em si nao rola; somente #mainContent rola por dentro. */
     .app-shell {
       height: var(--app-height);
@@ -125,7 +149,11 @@
       flex-direction: column;
       padding-top: env(safe-area-inset-top);
     }
-    .app-shell-header { flex: 0 0 auto; }
+
+    .app-shell-header {
+      flex: 0 0 auto;
+    }
+
     .app-shell-main {
       flex: 1 1 auto;
       min-height: 0;
@@ -133,14 +161,17 @@
       -webkit-overflow-scrolling: touch;
       overscroll-behavior-y: contain;
     }
+
     .app-viewport-fill {
       height: var(--app-height);
       min-height: var(--app-height);
       max-height: var(--app-height);
     }
+
     .login-viewport-min {
       min-height: var(--app-height);
     }
+
     .app-shell-nav {
       flex: 0 0 auto;
       padding-bottom: env(safe-area-inset-bottom);
@@ -292,34 +323,109 @@
       --border-error-container: #8b0000;
     }
 
-    .bg-background { background-color: var(--bg-background) !important; }
-    .bg-surface { background-color: var(--bg-surface) !important; }
-    .bg-surface-container-lowest { background-color: var(--bg-surface-lowest) !important; }
-    .bg-surface-container-low { background-color: var(--bg-surface-low) !important; }
-    .bg-surface-container-high { background-color: var(--bg-surface-high) !important; }
-    .bg-primary { background-color: var(--bg-primary) !important; }
-    .bg-primary-container { background-color: var(--bg-primary-container) !important; }
-    .bg-secondary { background-color: var(--bg-secondary) !important; }
-    .bg-secondary-container { background-color: var(--bg-secondary-container) !important; }
-    .bg-error-container { background-color: var(--bg-error-container) !important; }
-    .bg-primary-fixed { background-color: var(--bg-primary-fixed) !important; }
-    .bg-tertiary-fixed { background-color: var(--bg-tertiary-fixed) !important; }
+    .bg-background {
+      background-color: var(--bg-background) !important;
+    }
 
-    .text-on-background { color: var(--text-on-background) !important; }
-    .text-on-surface { color: var(--text-on-surface) !important; }
-    .text-on-surface-variant { color: var(--text-on-surface-variant) !important; }
-    .text-primary { color: var(--text-primary) !important; }
-    .text-on-primary { color: var(--text-on-primary) !important; }
-    .text-on-primary-container { color: var(--text-on-primary-container) !important; }
-    .text-secondary { color: var(--text-secondary) !important; }
-    .text-error { color: var(--text-error) !important; }
-    .text-on-primary-fixed-variant { color: var(--text-on-primary-fixed-variant) !important; }
-    .text-on-secondary-container { color: var(--text-on-secondary-container) !important; }
-    .text-on-tertiary-fixed-variant { color: var(--text-on-tertiary-fixed-variant) !important; }
+    .bg-surface {
+      background-color: var(--bg-surface) !important;
+    }
 
-    .border-outline { border-color: var(--border-outline) !important; }
-    .border-outline-variant { border-color: var(--border-outline-variant) !important; }
-    .border-error-container { border-color: var(--border-error-container) !important; }
+    .bg-surface-container-lowest {
+      background-color: var(--bg-surface-lowest) !important;
+    }
+
+    .bg-surface-container-low {
+      background-color: var(--bg-surface-low) !important;
+    }
+
+    .bg-surface-container-high {
+      background-color: var(--bg-surface-high) !important;
+    }
+
+    .bg-primary {
+      background-color: var(--bg-primary) !important;
+    }
+
+    .bg-primary-container {
+      background-color: var(--bg-primary-container) !important;
+    }
+
+    .bg-secondary {
+      background-color: var(--bg-secondary) !important;
+    }
+
+    .bg-secondary-container {
+      background-color: var(--bg-secondary-container) !important;
+    }
+
+    .bg-error-container {
+      background-color: var(--bg-error-container) !important;
+    }
+
+    .bg-primary-fixed {
+      background-color: var(--bg-primary-fixed) !important;
+    }
+
+    .bg-tertiary-fixed {
+      background-color: var(--bg-tertiary-fixed) !important;
+    }
+
+    .text-on-background {
+      color: var(--text-on-background) !important;
+    }
+
+    .text-on-surface {
+      color: var(--text-on-surface) !important;
+    }
+
+    .text-on-surface-variant {
+      color: var(--text-on-surface-variant) !important;
+    }
+
+    .text-primary {
+      color: var(--text-primary) !important;
+    }
+
+    .text-on-primary {
+      color: var(--text-on-primary) !important;
+    }
+
+    .text-on-primary-container {
+      color: var(--text-on-primary-container) !important;
+    }
+
+    .text-secondary {
+      color: var(--text-secondary) !important;
+    }
+
+    .text-error {
+      color: var(--text-error) !important;
+    }
+
+    .text-on-primary-fixed-variant {
+      color: var(--text-on-primary-fixed-variant) !important;
+    }
+
+    .text-on-secondary-container {
+      color: var(--text-on-secondary-container) !important;
+    }
+
+    .text-on-tertiary-fixed-variant {
+      color: var(--text-on-tertiary-fixed-variant) !important;
+    }
+
+    .border-outline {
+      border-color: var(--border-outline) !important;
+    }
+
+    .border-outline-variant {
+      border-color: var(--border-outline-variant) !important;
+    }
+
+    .border-error-container {
+      border-color: var(--border-error-container) !important;
+    }
 
     .theme-mini-card[data-theme="light-pro"],
     .theme-mini-card[data-theme="dark-pro"],
@@ -380,6 +486,7 @@
         opacity 0.15s ease,
         transform 0.15s cubic-bezier(0.25, 0.1, 0.25, 1);
     }
+
     .add-product-button.is-pressed {
       opacity: 0.85;
       transform: scale(0.97);
@@ -406,6 +513,7 @@
     })();
   </script>
 </head>
+
 <body class="bg-background text-on-background">
   <script>
     window.__SUPABASE_URL__ = window.__SUPABASE_URL__ || "";
@@ -413,33 +521,43 @@
   </script>
   <script src="./supabase-config.js"></script>
   <main class="app-viewport-fill mx-auto w-full max-w-[390px] bg-surface shadow-lg">
-    <section id="loginScreen" class="login-viewport-min flex flex-col justify-center overflow-y-auto px-margin-mobile py-stack-md">
+    <section id="loginScreen"
+      class="login-viewport-min flex flex-col justify-center overflow-y-auto px-margin-mobile py-stack-md">
       <div class="mb-stack-md flex flex-col items-center gap-stack-sm text-center">
         <div class="mb-stack-sm flex h-16 w-16 items-center justify-center rounded-xl bg-primary-container shadow-sm">
           <span class="material-symbols-rounded text-[40px] text-primary-fixed-dim">restaurant_menu</span>
         </div>
-        <h1 class="text-3xl font-extrabold text-primary">Service Mode</h1>
-        <p class="text-body-md text-on-surface-variant">Gestao e Controle para Restaurantes</p>
+        <h1 class="text-3xl font-extrabold text-primary">App da Jana</h1>
+        <p class="text-body-md text-on-surface-variant">Lançamentos de Comandas 1.0</p>
       </div>
-      <div class="rounded-xl border border-outline-variant bg-surface-container-lowest p-stack-md shadow-[0_2px_8px_rgba(0,0,0,0.05)]">
+      <div
+        class="rounded-xl border border-outline-variant bg-surface-container-lowest p-stack-md shadow-[0_2px_8px_rgba(0,0,0,0.05)]">
         <form id="loginForm" class="space-y-stack-md">
           <label class="block">
             <span class="mb-2 block text-sm font-bold text-on-surface">Email</span>
             <div class="group relative">
-              <span class="material-symbols-rounded absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant group-focus-within:text-primary">person</span>
-              <input id="usernameInput" type="email" autocomplete="email" class="h-touch-target-min w-full rounded-lg border border-outline-variant bg-surface-container-low pl-12 pr-4 text-base focus:border-transparent focus:outline-none focus:ring-2 focus:ring-primary" placeholder="seu@email.com">
+              <span
+                class="material-symbols-rounded absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant group-focus-within:text-primary">person</span>
+              <input id="usernameInput" type="email" autocomplete="email"
+                class="h-touch-target-min w-full rounded-lg border border-outline-variant bg-surface-container-low pl-12 pr-4 text-base focus:border-transparent focus:outline-none focus:ring-2 focus:ring-primary"
+                placeholder="seu@email.com">
             </div>
           </label>
           <label class="block">
             <span class="mb-2 block text-sm font-bold text-on-surface">Senha</span>
             <div class="group relative">
-              <span class="material-symbols-rounded absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant group-focus-within:text-primary">lock</span>
-              <input id="passwordInput" type="password" class="h-touch-target-min w-full rounded-lg border border-outline-variant bg-surface-container-low pl-12 pr-4 text-base focus:border-transparent focus:outline-none focus:ring-2 focus:ring-primary" placeholder="Digite sua senha">
+              <span
+                class="material-symbols-rounded absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant group-focus-within:text-primary">lock</span>
+              <input id="passwordInput" type="password"
+                class="h-touch-target-min w-full rounded-lg border border-outline-variant bg-surface-container-low pl-12 pr-4 text-base focus:border-transparent focus:outline-none focus:ring-2 focus:ring-primary"
+                placeholder="Digite sua senha">
             </div>
           </label>
-          <button type="submit" class="h-14 w-full rounded-lg bg-primary text-on-primary text-base font-bold transition active:scale-[0.98]">Entrar</button>
+          <button type="submit"
+            class="h-14 w-full rounded-lg bg-primary text-on-primary text-base font-bold transition active:scale-[0.98]">Entrar</button>
         </form>
-        <button id="biometricButton" class="mt-stack-sm flex h-touch-target-min w-full items-center justify-center gap-2 rounded-lg bg-surface-container-high text-on-surface font-bold transition active:scale-[0.98]">
+        <button id="biometricButton"
+          class="mt-stack-sm flex h-touch-target-min w-full items-center justify-center gap-2 rounded-lg bg-surface-container-high text-on-surface font-bold transition active:scale-[0.98]">
           <span class="material-symbols-rounded">history</span>
           Usar ultimo email
         </button>
@@ -448,51 +566,64 @@
     </section>
 
     <section id="appScreen" class="app-shell hidden bg-[#F2F2F7]">
-      <header id="appHeader" class="app-shell-header z-40 mt-2 flex h-touch-target-min items-center justify-between border-b border-outline-variant bg-surface px-margin-mobile shadow-sm">
+      <header id="appHeader"
+        class="app-shell-header z-40 mt-2 flex h-touch-target-min items-center justify-between border-b border-outline-variant bg-surface px-margin-mobile shadow-sm">
         <div class="flex items-center gap-stack-sm">
           <span class="material-symbols-rounded text-primary">restaurant_menu</span>
           <div>
-            <p class="text-[11px] font-semibold uppercase tracking-wide text-on-surface-variant">Service Mode</p>
+            <p class="text-[11px] font-semibold uppercase tracking-wide text-on-surface-variant">Usuario</p>
             <p id="currentUserLabel" class="text-sm font-bold text-primary"></p>
           </div>
         </div>
         <div class="flex items-center gap-2">
-          <button id="openSettingsButton" class="flex h-11 w-11 items-center justify-center rounded-lg border border-outline-variant text-on-surface" title="Configurações">
+          <button id="openSettingsButton"
+            class="flex h-11 w-11 items-center justify-center rounded-lg border border-outline-variant text-on-surface"
+            title="Configurações">
             <span class="material-symbols-rounded text-[20px]">settings</span>
           </button>
-          <button id="logoutButton" class="h-11 rounded-lg border border-outline-variant px-4 text-sm font-bold text-on-surface">Sair</button>
+          <button id="logoutButton"
+            class="h-11 rounded-lg border border-outline-variant px-4 text-sm font-bold text-on-surface">Sair</button>
         </div>
       </header>
 
       <div id="mainContent" class="app-shell-main px-margin-mobile py-stack-md">
         <section id="dashboardTab" class="tab-panel">
           <div class="grid grid-cols-3 gap-2">
-            <article class="rounded-lg border border-outline-variant bg-surface-container-lowest px-2 py-2.5 shadow-[0_1px_4px_rgba(0,0,0,0.04)]">
+            <article
+              class="rounded-lg border border-outline-variant bg-surface-container-lowest px-2 py-2.5 shadow-[0_1px_4px_rgba(0,0,0,0.04)]">
               <p class="text-[10px] font-semibold uppercase leading-tight text-on-surface-variant">Vendas</p>
               <p class="text-[10px] font-semibold uppercase leading-tight text-on-surface-variant">do dia</p>
               <p id="dailySalesCount" class="mt-1 text-lg font-extrabold leading-none text-primary">0</p>
             </article>
-            <article class="rounded-lg border border-outline-variant bg-surface-container-lowest px-2 py-2.5 shadow-[0_1px_4px_rgba(0,0,0,0.04)]">
+            <article
+              class="rounded-lg border border-outline-variant bg-surface-container-lowest px-2 py-2.5 shadow-[0_1px_4px_rgba(0,0,0,0.04)]">
               <p class="text-[10px] font-semibold uppercase leading-tight text-on-surface-variant">A</p>
               <p class="text-[10px] font-semibold uppercase leading-tight text-on-surface-variant">faturar</p>
               <p id="activeOrdersCount" class="mt-1 text-lg font-extrabold leading-none text-primary">0</p>
             </article>
-            <article class="rounded-lg border border-outline-variant bg-surface-container-lowest px-2 py-2.5 shadow-[0_1px_4px_rgba(0,0,0,0.04)]">
+            <article
+              class="rounded-lg border border-outline-variant bg-surface-container-lowest px-2 py-2.5 shadow-[0_1px_4px_rgba(0,0,0,0.04)]">
               <p class="text-[10px] font-semibold uppercase leading-tight text-on-surface-variant">Total</p>
               <p class="text-[10px] font-semibold uppercase leading-tight text-on-surface-variant">bruto</p>
-              <p id="dailyRevenueValue" class="mt-1 truncate text-sm font-extrabold leading-none text-secondary">R$ 0,00</p>
+              <p id="dailyRevenueValue" class="mt-1 truncate text-sm font-extrabold leading-none text-secondary">R$ 0,00
+              </p>
             </article>
           </div>
           <div class="mt-stack-md flex gap-stack-sm">
-            <button data-filter="all" class="status-filter h-touch-target-min flex-1 rounded-full bg-primary-container px-3 text-xs font-bold text-on-primary-container">Todas</button>
-            <button data-filter="Aberta" class="status-filter h-touch-target-min flex-1 rounded-full bg-surface-container-high px-3 text-xs font-bold text-on-surface-variant">Abertas</button>
-            <button data-filter="Finalizado" class="status-filter h-touch-target-min flex-1 rounded-full bg-surface-container-high px-3 text-xs font-bold text-on-surface-variant">Finalizadas</button>
+            <button data-filter="all"
+              class="status-filter h-touch-target-min flex-1 rounded-full bg-primary-container px-3 text-xs font-bold text-on-primary-container">Todas</button>
+            <button data-filter="Aberta"
+              class="status-filter h-touch-target-min flex-1 rounded-full bg-surface-container-high px-3 text-xs font-bold text-on-surface-variant">Abertas</button>
+            <button data-filter="Finalizado"
+              class="status-filter h-touch-target-min flex-1 rounded-full bg-surface-container-high px-3 text-xs font-bold text-on-surface-variant">Finalizadas</button>
           </div>
           <label class="mt-2 block">
             <span class="mb-1 block text-[10px] font-bold uppercase text-on-surface-variant">Data do dashboard</span>
-            <input id="dashboardDateInput" type="date" class="h-touch-target-min w-full rounded-lg border border-outline-variant bg-surface-container-low px-3 text-sm text-on-surface">
+            <input id="dashboardDateInput" type="date"
+              class="h-touch-target-min w-full rounded-lg border border-outline-variant bg-surface-container-low px-3 text-sm text-on-surface">
           </label>
-          <button id="newOrderButton" class="mt-stack-md flex h-14 w-full items-center justify-center gap-2 rounded-full bg-primary text-on-primary font-bold shadow-lg transition active:scale-95">
+          <button id="newOrderButton"
+            class="mt-stack-md flex h-14 w-full items-center justify-center gap-2 rounded-full bg-primary text-on-primary font-bold shadow-lg transition active:scale-95">
             <span class="material-symbols-rounded">add</span>
             Nova Comanda
           </button>
@@ -501,32 +632,51 @@
 
         <section id="reportsTab" class="tab-panel hidden">
           <h2 class="text-xl font-extrabold text-primary">Relatorios</h2>
-          <p class="mt-1 text-xs text-on-surface-variant">Baseado em comandas finalizadas no periodo (data do fechamento).</p>
+          <p class="mt-1 text-xs text-on-surface-variant">Baseado em comandas finalizadas no periodo (data do
+            fechamento).</p>
           <div class="mt-stack-md rounded-xl border border-outline-variant bg-surface-container-lowest p-3 shadow-sm">
             <span class="mb-2 block text-xs font-bold uppercase text-on-surface-variant">Periodo</span>
             <div class="flex flex-wrap gap-2">
               <label class="flex min-w-[140px] flex-1 flex-col gap-1 text-xs font-semibold text-on-surface-variant">
                 De
-                <input id="reportsDateFromInput" type="date" class="h-touch-target-min rounded-lg border border-outline-variant bg-surface-container-low px-3 text-sm text-on-surface">
+                <input id="reportsDateFromInput" type="date"
+                  class="h-touch-target-min rounded-lg border border-outline-variant bg-surface-container-low px-3 text-sm text-on-surface">
               </label>
               <label class="flex min-w-[140px] flex-1 flex-col gap-1 text-xs font-semibold text-on-surface-variant">
                 Ate
-                <input id="reportsDateToInput" type="date" class="h-touch-target-min rounded-lg border border-outline-variant bg-surface-container-low px-3 text-sm text-on-surface">
+                <input id="reportsDateToInput" type="date"
+                  class="h-touch-target-min rounded-lg border border-outline-variant bg-surface-container-low px-3 text-sm text-on-surface">
               </label>
             </div>
           </div>
           <div id="reportsPicker" class="mt-stack-md grid grid-cols-2 gap-2">
-            <button type="button" class="report-type-button rounded-xl border border-outline-variant bg-surface-container-lowest p-3 text-left text-sm font-semibold text-on-surface shadow-sm transition active:scale-[0.98]" data-report="daily">Vendas no periodo</button>
-            <button type="button" class="report-type-button rounded-xl border border-outline-variant bg-surface-container-lowest p-3 text-left text-sm font-semibold text-on-surface shadow-sm transition active:scale-[0.98]" data-report="revenue">Faturamento</button>
-            <button type="button" class="report-type-button rounded-xl border border-outline-variant bg-surface-container-lowest p-3 text-left text-sm font-semibold text-on-surface shadow-sm transition active:scale-[0.98]" data-report="payments">Formas de pagamento</button>
-            <button type="button" class="report-type-button rounded-xl border border-outline-variant bg-surface-container-lowest p-3 text-left text-sm font-semibold text-on-surface shadow-sm transition active:scale-[0.98]" data-report="products">Itens mais vendidos</button>
-            <button type="button" class="report-type-button rounded-xl border border-outline-variant bg-surface-container-lowest p-3 text-left text-sm font-semibold text-on-surface shadow-sm transition active:scale-[0.98]" data-report="peakHour">Horario de pico</button>
-            <button type="button" class="report-type-button rounded-xl border border-outline-variant bg-surface-container-lowest p-3 text-left text-sm font-semibold text-on-surface shadow-sm transition active:scale-[0.98]" data-report="weekday">Dia da semana</button>
-            <button type="button" class="report-type-button col-span-2 rounded-xl border border-outline-variant bg-surface-container-lowest p-3 text-left text-sm font-semibold text-on-surface shadow-sm transition active:scale-[0.98]" data-report="cashClose">Fechamento de caixa</button>
+            <button type="button"
+              class="report-type-button rounded-xl border border-outline-variant bg-surface-container-lowest p-3 text-left text-sm font-semibold text-on-surface shadow-sm transition active:scale-[0.98]"
+              data-report="daily">Vendas no periodo</button>
+            <button type="button"
+              class="report-type-button rounded-xl border border-outline-variant bg-surface-container-lowest p-3 text-left text-sm font-semibold text-on-surface shadow-sm transition active:scale-[0.98]"
+              data-report="revenue">Faturamento</button>
+            <button type="button"
+              class="report-type-button rounded-xl border border-outline-variant bg-surface-container-lowest p-3 text-left text-sm font-semibold text-on-surface shadow-sm transition active:scale-[0.98]"
+              data-report="payments">Formas de pagamento</button>
+            <button type="button"
+              class="report-type-button rounded-xl border border-outline-variant bg-surface-container-lowest p-3 text-left text-sm font-semibold text-on-surface shadow-sm transition active:scale-[0.98]"
+              data-report="products">Itens mais vendidos</button>
+            <button type="button"
+              class="report-type-button rounded-xl border border-outline-variant bg-surface-container-lowest p-3 text-left text-sm font-semibold text-on-surface shadow-sm transition active:scale-[0.98]"
+              data-report="peakHour">Horario de pico</button>
+            <button type="button"
+              class="report-type-button rounded-xl border border-outline-variant bg-surface-container-lowest p-3 text-left text-sm font-semibold text-on-surface shadow-sm transition active:scale-[0.98]"
+              data-report="weekday">Dia da semana</button>
+            <button type="button"
+              class="report-type-button col-span-2 rounded-xl border border-outline-variant bg-surface-container-lowest p-3 text-left text-sm font-semibold text-on-surface shadow-sm transition active:scale-[0.98]"
+              data-report="cashClose">Fechamento de caixa</button>
           </div>
-          <div id="reportsDetail" class="mt-stack-md hidden rounded-xl border border-outline-variant bg-surface-container-lowest p-4 shadow-sm">
+          <div id="reportsDetail"
+            class="mt-stack-md hidden rounded-xl border border-outline-variant bg-surface-container-lowest p-4 shadow-sm">
             <div class="mb-3 flex justify-end">
-              <button type="button" id="reportsBackButton" class="h-10 rounded-lg border border-outline-variant px-3 text-sm font-bold text-primary">Voltar</button>
+              <button type="button" id="reportsBackButton"
+                class="h-10 rounded-lg border border-outline-variant px-3 text-sm font-bold text-primary">Voltar</button>
             </div>
             <div id="reportsDetailBody"></div>
           </div>
@@ -539,105 +689,147 @@
               <span class="material-symbols-rounded text-[16px] text-on-surface-variant">chevron_left</span>
             </div>
             <div id="settingsTabsScroll" class="settings-tabs-scroll flex gap-2 overflow-x-auto pb-1">
-            <button data-settings-tab="products" class="settings-tab-button h-10 shrink-0 rounded-full bg-primary-container px-3 text-xs font-bold text-on-primary-container">Produtos</button>
-            <button data-settings-tab="operation" class="settings-tab-button h-10 shrink-0 rounded-full bg-surface-container-high px-3 text-xs font-bold text-on-surface-variant">Operacao</button>
-            <button data-settings-tab="categories" class="settings-tab-button h-10 flex-1 rounded-full bg-surface-container-high px-3 text-xs font-bold text-on-surface-variant">Categorias</button>
-            <button data-settings-tab="payments" class="settings-tab-button h-10 flex-1 rounded-full bg-surface-container-high px-3 text-xs font-bold text-on-surface-variant">Pagamentos</button>
-            <button data-settings-tab="theme" class="settings-tab-button h-10 shrink-0 rounded-full bg-surface-container-high px-3 text-xs font-bold text-on-surface-variant">Tema</button>
-            <button data-settings-tab="reopen" class="settings-tab-button h-10 shrink-0 rounded-full bg-surface-container-high px-3 text-xs font-bold text-on-surface-variant">Reabrir</button>
+              <button data-settings-tab="products"
+                class="settings-tab-button h-10 shrink-0 rounded-full bg-primary-container px-3 text-xs font-bold text-on-primary-container">Produtos</button>
+              <button data-settings-tab="operation"
+                class="settings-tab-button h-10 shrink-0 rounded-full bg-surface-container-high px-3 text-xs font-bold text-on-surface-variant">Operacao</button>
+              <button data-settings-tab="categories"
+                class="settings-tab-button h-10 flex-1 rounded-full bg-surface-container-high px-3 text-xs font-bold text-on-surface-variant">Categorias</button>
+              <button data-settings-tab="payments"
+                class="settings-tab-button h-10 flex-1 rounded-full bg-surface-container-high px-3 text-xs font-bold text-on-surface-variant">Pagamentos</button>
+              <button data-settings-tab="theme"
+                class="settings-tab-button h-10 shrink-0 rounded-full bg-surface-container-high px-3 text-xs font-bold text-on-surface-variant">Tema</button>
+              <button data-settings-tab="reopen"
+                class="settings-tab-button h-10 shrink-0 rounded-full bg-surface-container-high px-3 text-xs font-bold text-on-surface-variant">Reabrir</button>
             </div>
             <div id="settingsTabsRightHint" class="settings-tabs-hint settings-tabs-hint-right">
               <span class="material-symbols-rounded text-[16px] text-on-surface-variant">chevron_right</span>
             </div>
           </div>
 
-          <div id="productsSettingsPanel" class="settings-panel mt-stack-md rounded-xl border border-outline-variant bg-surface-container-lowest p-4 shadow-sm">
+          <div id="productsSettingsPanel"
+            class="settings-panel mt-stack-md rounded-xl border border-outline-variant bg-surface-container-lowest p-4 shadow-sm">
             <p class="text-sm font-bold text-on-surface">Cadastro de Produtos</p>
             <form id="productForm" class="mt-2 space-y-stack-sm">
               <input id="productIdInput" type="hidden">
               <label class="block">
                 <span class="mb-1 block text-sm font-bold text-on-surface">Nome</span>
-                <input id="productNameInput" type="text" class="h-touch-target-min w-full rounded-lg border border-outline-variant bg-surface-container-low px-4" required>
+                <input id="productNameInput" type="text"
+                  class="h-touch-target-min w-full rounded-lg border border-outline-variant bg-surface-container-low px-4"
+                  required>
               </label>
               <label class="block">
                 <span class="mb-1 block text-sm font-bold text-on-surface">Categoria</span>
-                <select id="productCategoryInput" class="h-touch-target-min w-full rounded-lg border border-outline-variant bg-surface-container-low px-4" required>
+                <select id="productCategoryInput"
+                  class="h-touch-target-min w-full rounded-lg border border-outline-variant bg-surface-container-low px-4"
+                  required>
                   <option value="">Selecione uma categoria</option>
                 </select>
               </label>
               <label class="block">
                 <span class="mb-1 block text-sm font-bold text-on-surface">Preco</span>
-                <input id="productPriceInput" type="number" min="0" step="0.01" class="h-touch-target-min w-full rounded-lg border border-outline-variant bg-surface-container-low px-4" required>
+                <input id="productPriceInput" type="number" min="0" step="0.01"
+                  class="h-touch-target-min w-full rounded-lg border border-outline-variant bg-surface-container-low px-4"
+                  required>
               </label>
-              <label class="flex h-touch-target-min items-center justify-between gap-3 rounded-lg border border-outline-variant px-3">
+              <label
+                class="flex h-touch-target-min items-center justify-between gap-3 rounded-lg border border-outline-variant px-3">
                 <span class="text-sm font-semibold text-on-surface">Exige preparo</span>
-                <input id="productRequiresPrepInput" type="checkbox" class="h-5 w-5 rounded border-outline-variant text-primary focus:ring-primary">
+                <input id="productRequiresPrepInput" type="checkbox"
+                  class="h-5 w-5 rounded border-outline-variant text-primary focus:ring-primary">
               </label>
               <div class="flex gap-stack-sm">
-                <button id="productSubmitButton" type="submit" class="h-touch-target-min flex-1 rounded-lg bg-primary text-sm font-bold text-on-primary">Salvar</button>
-                <button id="clearProductFormButton" type="button" class="h-touch-target-min flex-1 rounded-lg border border-outline text-sm font-bold text-on-surface">Limpar</button>
+                <button id="productSubmitButton" type="submit"
+                  class="h-touch-target-min flex-1 rounded-lg bg-primary text-sm font-bold text-on-primary">Salvar</button>
+                <button id="clearProductFormButton" type="button"
+                  class="h-touch-target-min flex-1 rounded-lg border border-outline text-sm font-bold text-on-surface">Limpar</button>
               </div>
             </form>
             <ul id="productsList" class="mt-stack-md space-y-stack-sm"></ul>
           </div>
 
-          <div id="operationSettingsPanel" class="settings-panel mt-stack-md rounded-xl border border-outline-variant bg-surface-container-lowest p-4 shadow-sm">
+          <div id="operationSettingsPanel"
+            class="settings-panel mt-stack-md rounded-xl border border-outline-variant bg-surface-container-lowest p-4 shadow-sm">
             <p class="text-sm font-bold text-on-surface">Operacao</p>
-            <label class="mt-2 flex h-touch-target-min items-center justify-between gap-3 rounded-lg border border-outline-variant px-3">
+            <label
+              class="mt-2 flex h-touch-target-min items-center justify-between gap-3 rounded-lg border border-outline-variant px-3">
               <span class="text-sm font-semibold text-on-surface">Usar numero de mesa</span>
-              <input id="tableModeToggle" type="checkbox" class="h-5 w-5 rounded border-outline-variant text-primary focus:ring-primary">
+              <input id="tableModeToggle" type="checkbox"
+                class="h-5 w-5 rounded border-outline-variant text-primary focus:ring-primary">
             </label>
-            <label class="mt-2 flex h-touch-target-min items-center justify-between gap-3 rounded-lg border border-outline-variant px-3">
+            <label
+              class="mt-2 flex h-touch-target-min items-center justify-between gap-3 rounded-lg border border-outline-variant px-3">
               <span class="text-sm font-semibold text-on-surface">Cobrar taxa de servico</span>
-              <input id="serviceFeeToggle" type="checkbox" class="h-5 w-5 rounded border-outline-variant text-primary focus:ring-primary">
+              <input id="serviceFeeToggle" type="checkbox"
+                class="h-5 w-5 rounded border-outline-variant text-primary focus:ring-primary">
             </label>
           </div>
 
-          <div id="categoriesSettingsPanel" class="settings-panel mt-stack-md hidden rounded-xl border border-outline-variant bg-surface-container-lowest p-4 shadow-sm">
+          <div id="categoriesSettingsPanel"
+            class="settings-panel mt-stack-md hidden rounded-xl border border-outline-variant bg-surface-container-lowest p-4 shadow-sm">
             <p class="text-sm font-bold text-on-surface">Categorias de Produtos</p>
             <form id="categoryForm" class="mt-2 flex items-center gap-2">
-              <input id="categoryNameInput" type="text" class="h-touch-target-min min-w-0 flex-1 rounded-lg border border-outline-variant bg-surface-container-low px-4" placeholder="Ex: Drinks" required>
-              <button type="submit" class="h-touch-target-min shrink-0 whitespace-nowrap rounded-lg bg-primary px-3 text-sm font-bold text-on-primary sm:px-4">Adicionar</button>
+              <input id="categoryNameInput" type="text"
+                class="h-touch-target-min min-w-0 flex-1 rounded-lg border border-outline-variant bg-surface-container-low px-4"
+                placeholder="Ex: Drinks" required>
+              <button type="submit"
+                class="h-touch-target-min shrink-0 whitespace-nowrap rounded-lg bg-primary px-3 text-sm font-bold text-on-primary sm:px-4">Adicionar</button>
             </form>
             <p id="categoryFeedback" class="mt-2 text-xs text-error"></p>
             <ul id="categoriesList" class="mt-2 space-y-2"></ul>
           </div>
 
-          <div id="paymentsSettingsPanel" class="settings-panel mt-stack-md hidden rounded-xl border border-outline-variant bg-surface-container-lowest p-4 shadow-sm">
+          <div id="paymentsSettingsPanel"
+            class="settings-panel mt-stack-md hidden rounded-xl border border-outline-variant bg-surface-container-lowest p-4 shadow-sm">
             <p class="text-sm font-bold text-on-surface">Formas de Pagamento</p>
             <form id="paymentMethodForm" class="mt-2 flex items-center gap-2">
-              <input id="paymentMethodNameInput" type="text" class="h-touch-target-min min-w-0 flex-1 rounded-lg border border-outline-variant bg-surface-container-low px-4" placeholder="Ex: Cartao Alimentacao" required>
-              <button type="submit" class="h-touch-target-min shrink-0 whitespace-nowrap rounded-lg bg-primary px-3 text-sm font-bold text-on-primary sm:px-4">Adicionar</button>
+              <input id="paymentMethodNameInput" type="text"
+                class="h-touch-target-min min-w-0 flex-1 rounded-lg border border-outline-variant bg-surface-container-low px-4"
+                placeholder="Ex: Cartao Alimentacao" required>
+              <button type="submit"
+                class="h-touch-target-min shrink-0 whitespace-nowrap rounded-lg bg-primary px-3 text-sm font-bold text-on-primary sm:px-4">Adicionar</button>
             </form>
             <p id="paymentMethodFeedback" class="mt-2 text-xs text-error"></p>
             <ul id="paymentMethodsSettingsList" class="mt-2 space-y-2"></ul>
           </div>
-          <div id="reopenSettingsPanel" class="settings-panel mt-stack-md hidden rounded-xl border border-outline-variant bg-surface-container-lowest p-4 shadow-sm">
+          <div id="reopenSettingsPanel"
+            class="settings-panel mt-stack-md hidden rounded-xl border border-outline-variant bg-surface-container-lowest p-4 shadow-sm">
             <p class="text-sm font-bold text-on-surface">Reabrir comanda</p>
-            <p class="mt-1 text-xs text-on-surface-variant">Comandas finalizadas ou canceladas na data escolhida. Ao reabrir, voltam como abertas para edicao.</p>
+            <p class="mt-1 text-xs text-on-surface-variant">Comandas finalizadas ou canceladas na data escolhida. Ao
+              reabrir, voltam como abertas para edicao.</p>
             <label class="mt-stack-sm block">
-              <span class="mb-1 block text-xs font-bold uppercase text-on-surface-variant">Data (fechamento ou cancelamento)</span>
-              <input id="reopenFilterDateInput" type="date" class="h-touch-target-min w-full rounded-lg border border-outline-variant bg-surface-container-low px-4">
+              <span class="mb-1 block text-xs font-bold uppercase text-on-surface-variant">Data (fechamento ou
+                cancelamento)</span>
+              <input id="reopenFilterDateInput" type="date"
+                class="h-touch-target-min w-full rounded-lg border border-outline-variant bg-surface-container-low px-4">
             </label>
-            <button id="reopenSearchButton" type="button" class="mt-stack-sm h-touch-target-min w-full rounded-xl bg-primary text-sm font-bold text-on-primary">Buscar nesta data</button>
+            <button id="reopenSearchButton" type="button"
+              class="mt-stack-sm h-touch-target-min w-full rounded-xl bg-primary text-sm font-bold text-on-primary">Buscar
+              nesta data</button>
             <p id="reopenPanelFeedback" class="mt-2 text-xs text-error"></p>
             <ul id="reopenOrdersList" class="mt-stack-sm space-y-2"></ul>
           </div>
-          <div id="themeSettingsPanel" class="settings-panel mt-stack-md hidden rounded-xl border border-outline-variant bg-surface-container-lowest p-4 shadow-sm">
+          <div id="themeSettingsPanel"
+            class="settings-panel mt-stack-md hidden rounded-xl border border-outline-variant bg-surface-container-lowest p-4 shadow-sm">
             <p class="text-sm font-bold text-on-surface">Tema visual</p>
             <p id="activeThemeLabel" class="mt-1 text-xs text-on-surface-variant"></p>
             <div id="themePresetList" class="mt-2 grid grid-cols-2 gap-2"></div>
           </div>
-          <button id="confirmSettingsButton" class="mt-3 h-touch-target-min w-full rounded-xl bg-primary text-base font-bold text-on-primary shadow-sm transition active:scale-[0.98]">Confirmar</button>
+          <button id="confirmSettingsButton"
+            class="mt-3 h-touch-target-min w-full rounded-xl bg-primary text-base font-bold text-on-primary shadow-sm transition active:scale-[0.98]">Confirmar</button>
         </section>
       </div>
 
       <nav id="appBottomNav" class="app-shell-nav z-40 w-full border-t border-outline-variant bg-surface">
         <div class="flex h-[52px] items-stretch gap-1 px-2 py-1">
-          <button type="button" id="homeButton" data-tab="dashboardTab" class="bottom-tab bottom-tab--active flex flex-1 items-center justify-center rounded-[0.875rem] bg-primary-container text-on-primary-container transition active:scale-[0.98]" title="Início" aria-label="Início" aria-selected="true">
+          <button type="button" id="homeButton" data-tab="dashboardTab"
+            class="bottom-tab bottom-tab--active flex flex-1 items-center justify-center rounded-[0.875rem] bg-primary-container text-on-primary-container transition active:scale-[0.98]"
+            title="Início" aria-label="Início" aria-selected="true">
             <span class="bottom-tab-icon material-symbols-rounded text-[28px] leading-none">space_dashboard</span>
           </button>
-          <button type="button" data-tab="reportsTab" class="bottom-tab flex flex-1 items-center justify-center rounded-[0.875rem] text-on-surface-variant transition active:scale-[0.98] hover:bg-surface-container-high/60" title="Relatórios" aria-label="Relatórios" aria-selected="false">
+          <button type="button" data-tab="reportsTab"
+            class="bottom-tab flex flex-1 items-center justify-center rounded-[0.875rem] text-on-surface-variant transition active:scale-[0.98] hover:bg-surface-container-high/60"
+            title="Relatórios" aria-label="Relatórios" aria-selected="false">
             <span class="bottom-tab-icon material-symbols-rounded text-[28px] leading-none">monitoring</span>
           </button>
         </div>
@@ -649,10 +841,12 @@
     <div class="p-4">
       <div class="mb-stack-sm flex items-center justify-between">
         <h3 class="text-lg font-extrabold text-primary">Nova Comanda</h3>
-        <button id="closeOrderDialogButton" class="h-10 rounded-lg border border-outline px-3 text-sm font-bold">Fechar</button>
+        <button id="closeOrderDialogButton"
+          class="h-10 rounded-lg border border-outline px-3 text-sm font-bold">Fechar</button>
       </div>
       <form id="orderForm" class="space-y-stack-sm">
-        <p class="text-sm text-on-surface-variant">Fluxo de clique único ativo. Use "Nova Comanda" para iniciar pedido direto.</p>
+        <p class="text-sm text-on-surface-variant">Fluxo de clique único ativo. Use "Nova Comanda" para iniciar pedido
+          direto.</p>
       </form>
     </div>
   </dialog>
@@ -660,44 +854,59 @@
   <dialog id="reopenConfirmDialog" class="w-full max-w-[390px] rounded-2xl border-0 p-0 backdrop:bg-black/50">
     <div class="p-4">
       <h3 class="text-lg font-extrabold text-primary">Reabrir comanda</h3>
-      <p id="reopenConfirmMessage" class="mt-2 text-sm text-on-surface-variant">Reabrir esta comanda? Ela voltara como aberta para edicao.</p>
+      <p id="reopenConfirmMessage" class="mt-2 text-sm text-on-surface-variant">Reabrir esta comanda? Ela voltara como
+        aberta para edicao.</p>
       <div class="mt-stack-sm grid grid-cols-2 gap-2">
-        <button type="button" id="reopenConfirmDismissButton" class="h-touch-target-min rounded-xl border border-outline text-sm font-bold text-on-surface">Nao</button>
-        <button type="button" id="reopenConfirmAcceptButton" class="h-touch-target-min rounded-xl bg-primary text-sm font-bold text-on-primary">Sim, reabrir</button>
+        <button type="button" id="reopenConfirmDismissButton"
+          class="h-touch-target-min rounded-xl border border-outline text-sm font-bold text-on-surface">Nao</button>
+        <button type="button" id="reopenConfirmAcceptButton"
+          class="h-touch-target-min rounded-xl bg-primary text-sm font-bold text-on-primary">Sim, reabrir</button>
       </div>
     </div>
   </dialog>
 
-  <section id="detailDialog" class="fixed inset-x-0 top-0 z-50 mx-auto hidden h-screen w-full max-w-[390px] overflow-auto bg-[#F2F2F7] px-margin-mobile pb-24 pt-4">
+  <section id="detailDialog"
+    class="fixed inset-x-0 top-0 z-50 mx-auto hidden h-screen w-full max-w-[390px] overflow-auto bg-[#F2F2F7] px-margin-mobile pb-24 pt-4">
     <div class="rounded-xl border border-outline-variant bg-surface-container-lowest p-4 shadow-sm">
       <div class="mb-stack-sm flex items-start justify-between gap-3">
         <div>
           <h3 id="detailTitle" class="text-lg font-extrabold text-primary"></h3>
           <p id="detailStatus" class="text-xs text-on-surface-variant"></p>
         </div>
-        <button id="closeDetailDialogButton" class="h-10 rounded-lg border border-outline px-3 text-sm font-bold">Voltar</button>
+        <button id="closeDetailDialogButton"
+          class="h-10 rounded-lg border border-outline px-3 text-sm font-bold">Voltar</button>
       </div>
       <div id="detailCustomerSlotTop" class="mt-stack-sm"></div>
-      <div id="orderTableGroup" class="mt-stack-sm hidden rounded-xl border border-outline-variant bg-surface-container-lowest p-3">
+      <div id="orderTableGroup"
+        class="mt-stack-sm hidden rounded-xl border border-outline-variant bg-surface-container-lowest p-3">
         <label class="block">
           <span class="mb-1 block text-xs font-bold uppercase text-on-surface-variant">Mesa</span>
-          <input id="orderTableInput" type="text" class="h-10 w-full rounded-lg border border-outline-variant px-3 text-sm" placeholder="Ex: Mesa 07" autocomplete="off">
+          <input id="orderTableInput" type="text"
+            class="h-10 w-full rounded-lg border border-outline-variant px-3 text-sm" placeholder="Ex: Mesa 07"
+            autocomplete="off">
         </label>
       </div>
-      <button id="openCancelFlowButton" class="mt-2 h-touch-target-min w-full rounded-xl border border-error-container bg-surface text-sm font-bold text-error shadow-sm transition active:scale-[0.98]">Cancelar Comanda</button>
+      <button id="openCancelFlowButton"
+        class="mt-2 h-touch-target-min w-full rounded-xl border border-error-container bg-surface text-sm font-bold text-error shadow-sm transition active:scale-[0.98]">Cancelar
+        Comanda</button>
       <div id="cancelConfirmBox" class="mt-2 hidden rounded-xl border border-error-container bg-error-container/40 p-3">
         <p class="text-sm font-semibold text-error">Tem certeza que deseja cancelar esta comanda?</p>
         <div class="mt-2 grid grid-cols-2 gap-2">
-          <button id="confirmCancelOrderButton" class="h-10 rounded-lg bg-error text-sm font-bold text-white">Sim, cancelar</button>
-          <button id="dismissCancelOrderButton" class="h-10 rounded-lg border border-outline-variant bg-surface text-sm font-bold text-on-surface">Voltar</button>
+          <button id="confirmCancelOrderButton" class="h-10 rounded-lg bg-error text-sm font-bold text-white">Sim,
+            cancelar</button>
+          <button id="dismissCancelOrderButton"
+            class="h-10 rounded-lg border border-outline-variant bg-surface text-sm font-bold text-on-surface">Voltar</button>
         </div>
       </div>
 
-      <div id="addFlowContent" class="mt-stack-sm hidden rounded-xl border border-outline-variant bg-surface-container-lowest p-3">
+      <div id="addFlowContent"
+        class="mt-stack-sm hidden rounded-xl border border-outline-variant bg-surface-container-lowest p-3">
         <h4 class="text-sm font-bold text-on-surface">Adicionar Item</h4>
         <label class="mt-2 block">
           <span class="mb-1 block text-xs font-bold uppercase text-on-surface-variant">Buscar por nome</span>
-          <input id="productSearchInput" type="text" class="h-touch-target-min w-full rounded-lg border border-outline-variant px-4" placeholder="Digite para filtrar">
+          <input id="productSearchInput" type="text"
+            class="h-touch-target-min w-full rounded-lg border border-outline-variant px-4"
+            placeholder="Digite para filtrar">
         </label>
         <div class="mt-2">
           <span class="mb-1 block text-xs font-bold uppercase text-on-surface-variant">Categoria</span>
@@ -722,45 +931,58 @@
         <p id="orderSubtotalLabel" class="mt-2 text-right text-base font-extrabold text-primary">Subtotal: R$ 0,00</p>
       </div>
       <div id="detailCustomerSlotBottom" class="mt-stack-sm">
-        <div id="detailCustomerSection" class="rounded-xl border border-outline-variant bg-surface-container-lowest p-3">
+        <div id="detailCustomerSection"
+          class="rounded-xl border border-outline-variant bg-surface-container-lowest p-3">
           <p class="text-xs font-bold uppercase text-on-surface-variant">Nome do Cliente (obrigatório)</p>
           <p id="detailCustomerHint" class="mt-1 text-xs text-on-surface-variant"></p>
           <div class="mt-2 flex flex-wrap gap-2">
-            <input id="detailCustomerInput" type="text" class="h-10 min-w-0 flex-1 rounded-lg border border-outline-variant px-3 text-sm" placeholder="Digite o nome do cliente" required>
-            <button id="saveCustomerButton" class="h-10 w-full rounded-lg bg-primary px-3 text-sm font-bold text-on-primary sm:w-auto sm:shrink-0">Salvar</button>
+            <input id="detailCustomerInput" type="text"
+              class="h-10 min-w-0 flex-1 rounded-lg border border-outline-variant px-3 text-sm"
+              placeholder="Digite o nome do cliente" required>
+            <button id="saveCustomerButton"
+              class="h-10 w-full rounded-lg bg-primary px-3 text-sm font-bold text-on-primary sm:w-auto sm:shrink-0">Salvar</button>
           </div>
           <p id="detailCustomerFeedback" class="mt-2 text-xs text-error"></p>
         </div>
       </div>
-      <button id="confirmDetailButton" class="mt-3 h-touch-target-min w-full rounded-xl bg-primary text-base font-bold text-on-primary shadow-sm transition active:scale-[0.98]">Confirmar</button>
+      <button id="confirmDetailButton"
+        class="mt-3 h-touch-target-min w-full rounded-xl bg-primary text-base font-bold text-on-primary shadow-sm transition active:scale-[0.98]">Confirmar</button>
     </div>
   </section>
 
-  <section id="checkoutDialog" class="fixed inset-x-0 top-0 z-50 mx-auto hidden h-screen w-full max-w-[390px] overflow-auto bg-[#F2F2F7] px-margin-mobile pb-24 pt-4">
+  <section id="checkoutDialog"
+    class="fixed inset-x-0 top-0 z-50 mx-auto hidden h-screen w-full max-w-[390px] overflow-auto bg-[#F2F2F7] px-margin-mobile pb-24 pt-4">
     <div class="rounded-xl border border-outline-variant bg-surface-container-lowest p-4 shadow-sm">
       <div class="mb-stack-sm flex items-center justify-between">
         <h3 class="text-lg font-extrabold text-primary">Fechamento</h3>
-        <button id="closeCheckoutDialogButton" class="h-10 rounded-lg border border-outline px-3 text-sm font-bold">Voltar</button>
+        <button id="closeCheckoutDialogButton"
+          class="h-10 rounded-lg border border-outline px-3 text-sm font-bold">Voltar</button>
       </div>
-      <div id="checkoutSummary" class="space-y-2 rounded-xl border border-outline-variant bg-surface-container-lowest p-3"></div>
+      <div id="checkoutSummary"
+        class="space-y-2 rounded-xl border border-outline-variant bg-surface-container-lowest p-3"></div>
       <label id="serviceFeeField" class="mt-stack-sm block">
         <span class="mb-1 block text-sm font-bold">Taxa de Servico (%)</span>
-        <input id="serviceFeeInput" type="number" min="0" max="30" step="0.5" class="h-touch-target-min w-full rounded-lg border border-outline-variant px-4" value="10">
+        <input id="serviceFeeInput" type="number" min="0" max="30" step="0.5"
+          class="h-touch-target-min w-full rounded-lg border border-outline-variant px-4" value="10">
       </label>
       <label class="mt-stack-sm block">
         <span class="mb-1 block text-sm font-bold">Formas de Pagamento</span>
         <div id="checkoutPaymentMethodsList" class="grid grid-cols-2 gap-2"></div>
       </label>
-      <button id="confirmCheckoutButton" class="mt-stack-sm h-touch-target-min w-full rounded-xl bg-primary text-base font-bold text-on-primary">Finalizar Comanda</button>
+      <button id="confirmCheckoutButton"
+        class="mt-stack-sm h-touch-target-min w-full rounded-xl bg-primary text-base font-bold text-on-primary">Finalizar
+        Comanda</button>
       <p id="checkoutFeedback" class="mt-2 text-sm text-error"></p>
     </div>
   </section>
 
-  <section id="cashCloseHistoryDialog" class="fixed inset-x-0 top-0 z-50 mx-auto hidden h-screen w-full max-w-[390px] overflow-auto bg-[#F2F2F7] px-margin-mobile pb-24 pt-4">
+  <section id="cashCloseHistoryDialog"
+    class="fixed inset-x-0 top-0 z-50 mx-auto hidden h-screen w-full max-w-[390px] overflow-auto bg-[#F2F2F7] px-margin-mobile pb-24 pt-4">
     <div class="rounded-xl border border-outline-variant bg-surface-container-lowest p-4 shadow-sm">
       <div class="mb-stack-sm flex items-center justify-between gap-2">
         <h3 class="text-lg font-extrabold text-primary">Historico de Fechamentos</h3>
-        <button id="closeCashCloseHistoryButton" class="h-10 rounded-lg border border-outline px-3 text-sm font-bold">Fechar</button>
+        <button id="closeCashCloseHistoryButton"
+          class="h-10 rounded-lg border border-outline px-3 text-sm font-bold">Fechar</button>
       </div>
       <div id="cashCloseHistoryBody"></div>
     </div>
@@ -779,7 +1001,7 @@
         var eruda = document.createElement("script");
         eruda.src = "https://cdn.jsdelivr.net/npm/eruda";
         eruda.onload = function () {
-          try { window.eruda.init(); } catch (e) {}
+          try { window.eruda.init(); } catch (e) { }
           loadApp();
         };
         eruda.onerror = loadApp;
@@ -790,4 +1012,5 @@
     })();
   </script>
 </body>
+
 </html>
