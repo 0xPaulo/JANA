@@ -407,6 +407,11 @@
   </script>
 </head>
 <body class="bg-background text-on-background">
+  <script>
+    window.__SUPABASE_URL__ = window.__SUPABASE_URL__ || "";
+    window.__SUPABASE_ANON_KEY__ = window.__SUPABASE_ANON_KEY__ || "";
+  </script>
+  <script src="./supabase-config.js"></script>
   <main class="app-viewport-fill mx-auto w-full max-w-[390px] bg-surface shadow-lg">
     <section id="loginScreen" class="login-viewport-min flex flex-col justify-center overflow-y-auto px-margin-mobile py-stack-md">
       <div class="mb-stack-md flex flex-col items-center gap-stack-sm text-center">
@@ -419,10 +424,10 @@
       <div class="rounded-xl border border-outline-variant bg-surface-container-lowest p-stack-md shadow-[0_2px_8px_rgba(0,0,0,0.05)]">
         <form id="loginForm" class="space-y-stack-md">
           <label class="block">
-            <span class="mb-2 block text-sm font-bold text-on-surface">Usuario</span>
+            <span class="mb-2 block text-sm font-bold text-on-surface">Email</span>
             <div class="group relative">
               <span class="material-symbols-rounded absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant group-focus-within:text-primary">person</span>
-              <input id="usernameInput" type="text" class="h-touch-target-min w-full rounded-lg border border-outline-variant bg-surface-container-low pl-12 pr-4 text-base focus:border-transparent focus:outline-none focus:ring-2 focus:ring-primary" placeholder="Digite seu usuario">
+              <input id="usernameInput" type="email" autocomplete="email" class="h-touch-target-min w-full rounded-lg border border-outline-variant bg-surface-container-low pl-12 pr-4 text-base focus:border-transparent focus:outline-none focus:ring-2 focus:ring-primary" placeholder="seu@email.com">
             </div>
           </label>
           <label class="block">
@@ -435,8 +440,8 @@
           <button type="submit" class="h-14 w-full rounded-lg bg-primary text-on-primary text-base font-bold transition active:scale-[0.98]">Entrar</button>
         </form>
         <button id="biometricButton" class="mt-stack-sm flex h-touch-target-min w-full items-center justify-center gap-2 rounded-lg bg-surface-container-high text-on-surface font-bold transition active:scale-[0.98]">
-          <span class="material-symbols-rounded">fingerprint</span>
-          Acesso Biometrico
+          <span class="material-symbols-rounded">history</span>
+          Usar ultimo email
         </button>
         <p id="loginFeedback" class="mt-stack-sm text-sm text-error"></p>
       </div>

@@ -23,8 +23,230 @@ const API_BASE =
   typeof window !== "undefined" && (window.location?.protocol === "http:" || window.location?.protocol === "https:")
     ? `${window.location.protocol}//${window.location.hostname}:3001`
     : "http://localhost:3001";
+
+function isSupabaseConfigured() {
+  if (typeof window === "undefined") return false;
+  const url = String(window.__SUPABASE_URL__ || "").trim();
+  const key = String(window.__SUPABASE_ANON_KEY__ || "").trim();
+  return url.length > 0 && key.length > 0;
+}
+
+let supabaseClient = null;
+
+async function getSupabase() {
+  if (!isSupabaseConfigured()) return null;
+  if (supabaseClient) return supabaseClient;
+  const { createClient } = await import("https://esm.sh/@supabase/supabase-js@2");
+  supabaseClient = createClient(window.__SUPABASE_URL__, window.__SUPABASE_ANON_KEY__, {
+    auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
+  });
+  return supabaseClient;
+}
+
+function defaultConfigPayload() {
+  return {
+    id: 1,
+    useTables: false,
+    useServiceFee: true,
+    activeTheme: "apple",
+    categories: ["Bebidas", "Lanches", "Porcoes", "Pratos", "Sobremesas", "Outros"],
+    prepCategories: [],
+    paymentMethods: [
+      { id: "card", name: "Cartao", active: true },
+      { id: "cash", name: "Dinheiro", active: true },
+      { id: "pix", name: "PIX", active: true },
+      { id: "voucher", name: "Vale Ref.", active: true }
+    ]
+  };
+}
+
+function productRowToApp(row) {
+  return {
+    id: row.id,
+    name: row.name,
+    category: row.category,
+    price: Number(row.price),
+    requiresPrep: row.requires_prep === true
+  };
+}
+
+function productToRow(p) {
+  return {
+    id: p.id,
+    name: p.name,
+    category: p.category,
+    price: p.price,
+    requires_prep: p.requiresPrep === true
+  };
+}
+
+function commandaToPayload(order) {
+  return JSON.parse(JSON.stringify(order));
+}
+
+/** Documento JSON gravado em commandas.payload — sem `id` (PK só na coluna). */
+function commandaPayloadDocument(order) {
+  const doc = commandaToPayload(order);
+  delete doc.id;
+  return doc;
+}
+
+function toIsoTimestamptz(value) {
+  if (value == null || value === "") return null;
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d.toISOString();
+}
+
+async function ensureProfile(session, supabase) {
+  const { data } = await supabase.from("profiles").select("id").eq("id", session.user.id).maybeSingle();
+  if (data) return;
+  const { error } = await supabase.from("profiles").insert({
+    id: session.user.id,
+    display_name: session.user.email?.split("@")[0] || "Usuario",
+    role: "Gerente"
+  });
+  if (error && error.code !== "23505") {
+    console.warn("[JANA] ensureProfile:", error.message);
+  }
+}
+
+async function bootstrapFromSupabase(session) {
+  const supabase = await getSupabase();
+  if (!supabase) throw new Error("Supabase indisponivel");
+  await ensureProfile(session, supabase);
+
+  const [pRes, cRes, dRes, cfgRes, profRes] = await Promise.all([
+    supabase.from("products").select("*"),
+    supabase.from("commandas").select("id, payload, status, created_at, updated_at, closed_at"),
+    supabase.from("daily_closes").select("id, payload, closed_at, date_ymd"),
+    supabase.from("app_config").select("payload").maybeSingle(),
+    supabase.from("profiles").select("display_name, role").eq("id", session.user.id).maybeSingle()
+  ]);
+
+  if (pRes.error) throw pRes.error;
+  if (cRes.error) throw cRes.error;
+  if (dRes.error) throw dRes.error;
+  if (cfgRes.error) throw cfgRes.error;
+  if (profRes.error) throw profRes.error;
+
+  state.cache.products = (pRes.data || []).map(productRowToApp);
+  state.cache.commandas = (cRes.data || []).map((r) => {
+    const base = { ...(r.payload || {}), id: r.id };
+    if (r.status != null && r.status !== "") base.status = r.status;
+    if (r.closed_at != null) base.closedAt = r.closed_at;
+    if (r.created_at != null) base.createdAt = r.created_at;
+    return base;
+  });
+  state.cache.dailyCloses = (dRes.data || []).map((r) => {
+    const p = r.payload || {};
+    let dateYmd = p.dateYmd;
+    if (r.date_ymd != null) {
+      dateYmd =
+        typeof r.date_ymd === "string"
+          ? r.date_ymd.slice(0, 10)
+          : String(r.date_ymd).slice(0, 10);
+    }
+    return {
+      ...p,
+      id: r.id,
+      closedAt: r.closed_at ?? p.closedAt,
+      dateYmd: dateYmd ?? p.dateYmd
+    };
+  });
+
+  if (cfgRes.data?.payload && typeof cfgRes.data.payload === "object") {
+    state.cache.config = { ...cfgRes.data.payload };
+  } else {
+    const def = defaultConfigPayload();
+    const up = await supabase
+      .from("app_config")
+      .upsert({ user_id: session.user.id, payload: def }, { onConflict: "user_id" });
+    if (up.error) throw up.error;
+    state.cache.config = def;
+  }
+
+  const pr = profRes.data;
+  setLoggedUser({
+    id: session.user.id,
+    email: session.user.email,
+    username: pr?.display_name || session.user.email?.split("@")[0] || "Usuario",
+    role: pr?.role || "Atendente"
+  });
+}
+
+async function upsertProductRemote(product) {
+  const sb = await getSupabase();
+  if (!sb) return;
+  const { error } = await sb.from("products").upsert(productToRow(product));
+  if (error) throw error;
+}
+
+async function deleteProductRemote(productId) {
+  const sb = await getSupabase();
+  if (!sb) return;
+  const { error } = await sb.from("products").delete().eq("id", String(productId));
+  if (error) throw error;
+}
+
+async function upsertCommandaRemote(order) {
+  const sb = await getSupabase();
+  if (!sb) return;
+  const createdRaw = toIsoTimestamptz(order.createdAt) || new Date().toISOString();
+  const row = {
+    id: order.id,
+    payload: commandaPayloadDocument(order),
+    status: order.status || "Aberta",
+    closed_at: toIsoTimestamptz(order.closedAt),
+    created_at: createdRaw
+  };
+  const { error } = await sb.from("commandas").upsert(row);
+  if (error) throw error;
+}
+
+async function deleteCommandaRemote(orderId) {
+  const sb = await getSupabase();
+  if (!sb) return;
+  const { error } = await sb.from("commandas").delete().eq("id", String(orderId));
+  if (error) throw error;
+}
+
+async function upsertAppConfigRemote(config) {
+  const sb = await getSupabase();
+  if (!sb) return;
+  const { data: u } = await sb.auth.getUser();
+  const uid = u.user?.id;
+  if (!uid) return;
+  const { error } = await sb.from("app_config").upsert({ user_id: uid, payload: { ...config } }, { onConflict: "user_id" });
+  if (error) throw error;
+}
+
+async function insertDailyCloseRemote(id, payloadDoc) {
+  const sb = await getSupabase();
+  if (!sb) return;
+  const closed_at = toIsoTimestamptz(payloadDoc.closedAt);
+  const dateYmd = payloadDoc.dateYmd;
+  if (!dateYmd || String(dateYmd).trim() === "") {
+    throw new Error("daily_close sem dateYmd");
+  }
+  const date_ymd = String(dateYmd).slice(0, 10);
+  const { error } = await sb.from("daily_closes").insert({
+    id,
+    payload: payloadDoc,
+    closed_at: closed_at || new Date().toISOString(),
+    date_ymd
+  });
+  if (error) throw error;
+}
+
+async function deleteDailyCloseRemote(closeId) {
+  const sb = await getSupabase();
+  if (!sb) return;
+  const { error } = await sb.from("daily_closes").delete().eq("id", String(closeId));
+  if (error) throw error;
+}
+
 /** Build tag visivel para confirmar JS atual no celular. Erros vao para o console (Eruda no mobile). */
-const APP_BUILD_TAG = "build-2026-05-09T09:35-reports-voltar-right";
+const APP_BUILD_TAG = "build-2026-05-09-supabase-auth";
 const IS_STANDALONE =
   typeof window !== "undefined" &&
   ((window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) ||
@@ -120,6 +342,14 @@ const state = {
     dailyCloses: []
   }
 };
+
+function clearDataCache() {
+  state.cache.users = [];
+  state.cache.products = [];
+  state.cache.commandas = [];
+  state.cache.dailyCloses = [];
+  state.cache.config = defaultConfigPayload();
+}
 
 const refs = {
   loginScreen: document.querySelector("#loginScreen"),
@@ -308,6 +538,19 @@ function loadProducts() {
 
 function saveProducts(products) {
   state.cache.products = products;
+  if (isSupabaseConfigured()) {
+    void (async () => {
+      for (const product of products) {
+        if (product.id === undefined || product.id === null || product.id === "") continue;
+        try {
+          await upsertProductRemote(product);
+        } catch (e) {
+          console.error("[JANA] saveProducts", e);
+        }
+      }
+    })();
+    return;
+  }
   void Promise.all(
     products.map((product) => {
       if (product.id !== undefined && product.id !== null && product.id !== "") return apiPatch(`/products/${product.id}`, product);
@@ -322,6 +565,19 @@ function loadOrders() {
 
 function saveOrders(orders) {
   state.cache.commandas = orders;
+  if (isSupabaseConfigured()) {
+    void (async () => {
+      for (const order of orders) {
+        if (order.id === undefined || order.id === null || order.id === "") continue;
+        try {
+          await upsertCommandaRemote(order);
+        } catch (e) {
+          console.error("[JANA] saveOrders", e);
+        }
+      }
+    })();
+    return;
+  }
   void Promise.all(
     orders.map((order) => {
       if (order.id !== undefined && order.id !== null && order.id !== "") return apiPatch(`/commandas/${order.id}`, order);
@@ -379,8 +635,15 @@ async function persistDailyClose(draft) {
     finalizedOrdersCount: draft.finalizedOrdersCount,
     sales: Array.isArray(draft.sales) ? draft.sales : []
   };
-  const saved = await apiPost("/dailyCloses", payload);
-  list.unshift(saved);
+  if (isSupabaseConfigured()) {
+    const id = crypto.randomUUID();
+    const saved = { ...payload, id };
+    await insertDailyCloseRemote(id, saved);
+    list.unshift(saved);
+  } else {
+    const saved = await apiPost("/dailyCloses", payload);
+    list.unshift(saved);
+  }
   state.cache.dailyCloses = list;
 }
 
@@ -394,7 +657,11 @@ async function rollbackLastDailyClose(dateYmd) {
         new Date(a.closedAt || `${a.dateYmd || ""}T00:00:00`).getTime()
     )[0];
   if (!target) return false;
-  await apiDelete(`/dailyCloses/${target.id}`);
+  if (isSupabaseConfigured()) {
+    await deleteDailyCloseRemote(target.id);
+  } else {
+    await apiDelete(`/dailyCloses/${target.id}`);
+  }
   state.cache.dailyCloses = list.filter((entry) => String(entry.id) !== String(target.id));
   return true;
 }
@@ -492,6 +759,10 @@ function loadConfig() {
 
 function saveConfig(config) {
   state.cache.config = config;
+  if (isSupabaseConfigured()) {
+    void upsertAppConfigRemote(config).catch((e) => console.error("[JANA] saveConfig", e));
+    return;
+  }
   void apiPatch(`/config/${config.id || 1}`, config);
 }
 
@@ -832,7 +1103,6 @@ function performReopenOrder(orderId) {
     target.paymentMethods = [];
   }
   saveOrders(orders);
-  void apiPatch(`/commandas/${target.id}`, target).catch(() => {});
   return true;
 }
 
@@ -908,8 +1178,18 @@ function serializeCommandaForPost(order) {
 async function persistPendingOrderToServer() {
   const order = state.pendingNewOrder;
   if (!order) return;
-  const created = await apiPost("/commandas", serializeCommandaForPost(order));
   const orders = loadOrders();
+  if (isSupabaseConfigured()) {
+    order.id = crypto.randomUUID();
+    order.everHadItems = true;
+    orders.unshift({ ...order });
+    state.cache.commandas = orders;
+    state.pendingNewOrder = null;
+    state.selectedOrderId = order.id;
+    saveOrders(orders);
+    return;
+  }
+  const created = await apiPost("/commandas", serializeCommandaForPost(order));
   const merged = { ...created, everHadItems: true };
   orders.unshift(merged);
   state.cache.commandas = orders;
@@ -1882,7 +2162,11 @@ function deletePaymentMethod(methodId) {
 
 function deleteProduct(productId) {
   const products = loadProducts().filter((product) => String(product.id) !== String(productId));
-  void apiDelete(`/products/${productId}`);
+  if (isSupabaseConfigured()) {
+    void deleteProductRemote(productId).catch((e) => console.error("[JANA] deleteProduct", e));
+  } else {
+    void apiDelete(`/products/${productId}`);
+  }
   saveProducts(products);
   renderAll();
 }
@@ -1919,11 +2203,42 @@ function bindDetailCustomerViewportAssistOnce() {
 
 function bindEvents() {
   bindDetailCustomerViewportAssistOnce();
-  refs.loginForm.addEventListener("submit", (event) => {
+  refs.loginForm.addEventListener("submit", async (event) => {
     event.preventDefault();
     refs.loginFeedback.textContent = "";
-    const username = refs.usernameInput.value.trim();
+    const email = refs.usernameInput.value.trim();
     const password = refs.passwordInput.value.trim();
+
+    if (isSupabaseConfigured()) {
+      if (!email) {
+        refs.loginFeedback.textContent = "Informe o email.";
+        return;
+      }
+      if (!password) {
+        refs.loginFeedback.textContent = "Informe a senha.";
+        return;
+      }
+      try {
+        localStorage.setItem("jana_last_email", email);
+        const sb = await getSupabase();
+        if (!sb) {
+          refs.loginFeedback.textContent = "Supabase nao inicializado.";
+          return;
+        }
+        const { error } = await sb.auth.signInWithPassword({ email, password });
+        if (error) {
+          refs.loginFeedback.textContent = error.message || "Credenciais invalidas.";
+          return;
+        }
+        refs.loginForm.reset();
+      } catch (e) {
+        console.error(e);
+        refs.loginFeedback.textContent = "Falha no login.";
+      }
+      return;
+    }
+
+    const username = email;
     const validUser = username
       ? state.cache.users.find((user) => {
         if (user.username !== username) return false;
@@ -1942,6 +2257,16 @@ function bindEvents() {
 
   refs.biometricButton.addEventListener("click", () => {
     refs.loginFeedback.textContent = "";
+    const last = localStorage.getItem("jana_last_email");
+    if (last) {
+      refs.usernameInput.value = last;
+      refs.usernameInput.focus();
+      return;
+    }
+    if (isSupabaseConfigured()) {
+      refs.loginFeedback.textContent = "Nenhum email salvo. Faca login uma vez.";
+      return;
+    }
     const quickUser = state.cache.users[0];
     if (!quickUser) {
       refs.loginFeedback.textContent = "API indisponivel. Inicie o json-server.";
@@ -1951,11 +2276,20 @@ function bindEvents() {
     renderAuth();
   });
 
-  refs.logoutButton.addEventListener("click", () => {
-    clearLoggedUser();
+  refs.logoutButton.addEventListener("click", async () => {
     state.currentView = "main";
     refs.orderDialog.close();
-    renderAuth();
+    if (isSupabaseConfigured()) {
+      try {
+        const sb = await getSupabase();
+        if (sb) await sb.auth.signOut();
+      } catch (e) {
+        console.error(e);
+      }
+    } else {
+      clearLoggedUser();
+      renderAuth();
+    }
   });
 
   refs.openSettingsButton.addEventListener("click", () => {
@@ -2219,7 +2553,11 @@ function bindEvents() {
 
     if (!temItensNaComanda) {
       try {
-        await apiDelete(`/commandas/${target.id}`);
+        if (isSupabaseConfigured()) {
+          await deleteCommandaRemote(target.id);
+        } else {
+          await apiDelete(`/commandas/${target.id}`);
+        }
       } catch (_) {
         /* servidor indisponivel */
       }
@@ -2229,10 +2567,12 @@ function bindEvents() {
       target.status = "Cancelada";
       target.canceledAt = new Date().toISOString();
       saveOrders(orders);
-      try {
-        await apiPatch(`/commandas/${target.id}`, target);
-      } catch (_) {
-        /* cache ja atualizado; PATCH pode falhar se servidor caiu */
+      if (!isSupabaseConfigured()) {
+        try {
+          await apiPatch(`/commandas/${target.id}`, target);
+        } catch (_) {
+          /* cache ja atualizado; PATCH pode falhar se servidor caiu */
+        }
       }
     }
 
@@ -2310,14 +2650,23 @@ function bindEvents() {
         target.requiresPrep = productData.requiresPrep;
       }
     } else {
-      const newProduct = { ...productData };
+      const newProduct = { ...productData, id: crypto.randomUUID() };
       products.unshift(newProduct);
-      void apiPost("/products", newProduct).then((created) => {
-        const idx = products.findIndex((p) => p === newProduct);
-        if (idx >= 0) products[idx] = created;
-        saveProducts(products);
-        renderAll();
-      });
+      void (async () => {
+        try {
+          if (isSupabaseConfigured()) {
+            await upsertProductRemote(newProduct);
+          } else {
+            const created = await apiPost("/products", { ...productData });
+            const idx = products.findIndex((p) => p === newProduct);
+            if (idx >= 0) products[idx] = created;
+          }
+          saveProducts(products);
+          renderAll();
+        } catch (e) {
+          console.error("[JANA] novo produto", e);
+        }
+      })();
       renderAll();
       return;
     }
@@ -2470,21 +2819,63 @@ function bindPullToRefresh(scroller) {
 }
 
 async function init() {
+  const t = todayLocalYmd();
+  state.reportDateFrom = t;
+  state.reportDateTo = t;
+  state.cashCloseDateYmd = t;
+  bindEvents();
+  bindIosDoubleTapBlocker();
+  bindPullToRefresh(refs.mainContent);
+  bindPullToRefresh(refs.loginScreen);
+
+  if (isSupabaseConfigured()) {
+    try {
+      const supabase = await getSupabase();
+      if (!supabase) throw new Error("client");
+      supabase.auth.onAuthStateChange(async (event, session) => {
+        if (event === "INITIAL_SESSION" || event === "SIGNED_IN") {
+          if (!session) {
+            renderAuth();
+            return;
+          }
+          try {
+            await bootstrapFromSupabase(session);
+            state.config = loadConfig();
+            applyTheme();
+            renderAuth();
+          } catch (e) {
+            console.error(e);
+            refs.loginFeedback.textContent = "Erro ao carregar dados do Supabase.";
+            renderAuth();
+          }
+          return;
+        }
+        if (event === "SIGNED_OUT") {
+          clearDataCache();
+          clearLoggedUser();
+          renderAuth();
+        }
+      });
+    } catch (e) {
+      console.error(e);
+      refs.loginFeedback.textContent =
+        "Nao foi possivel iniciar o Supabase. Copie supabase-config.example.js para supabase-config.js e preencha.";
+      applyTheme();
+      renderAuth();
+    }
+    return;
+  }
+
   try {
     await bootstrapFromApi();
     state.config = loadConfig();
-    const t = todayLocalYmd();
-    state.reportDateFrom = t;
-    state.reportDateTo = t;
-    state.cashCloseDateYmd = t;
     applyTheme();
-    bindEvents();
-    bindIosDoubleTapBlocker();
-    bindPullToRefresh(refs.mainContent);
-    bindPullToRefresh(refs.loginScreen);
     renderAuth();
   } catch (error) {
+    console.error(error);
     refs.loginFeedback.textContent = "Nao foi possivel conectar na API local (json-server).";
+    applyTheme();
+    renderAuth();
   }
 }
 
