@@ -124,6 +124,13 @@ async function ensureProfile(session, supabase) {
 async function bootstrapFromSupabase(session) {
   const supabase = await getSupabase();
   if (!supabase) throw new Error("Supabase indisponivel");
+  const { error: sessionErr } = await supabase.auth.setSession({
+    access_token: session.access_token,
+    refresh_token: session.refresh_token
+  });
+  if (sessionErr) {
+    console.warn("[JANA] setSession:", sessionErr.message);
+  }
   await ensureProfile(session, supabase);
 
   const [pRes, cRes, dRes, cfgRes, profRes] = await Promise.all([
