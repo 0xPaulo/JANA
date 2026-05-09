@@ -1,0 +1,2251 @@
+/** Polyfill: crypto.randomUUID so existe em secure contexts (HTTPS/localhost). */
+(function () {
+  if (typeof globalThis.crypto !== "object") globalThis.crypto = {};
+  if (typeof globalThis.crypto.randomUUID === "function") return;
+  const getRandomValues =
+    typeof globalThis.crypto.getRandomValues === "function"
+      ? (arr) => globalThis.crypto.getRandomValues(arr)
+      : (arr) => {
+        for (let i = 0; i < arr.length; i++) arr[i] = (Math.random() * 256) & 0xff;
+        return arr;
+      };
+  globalThis.crypto.randomUUID = function () {
+    const b = getRandomValues(new Uint8Array(16));
+    b[6] = (b[6] & 0x0f) | 0x40;
+    b[8] = (b[8] & 0x3f) | 0x80;
+    const h = [...b].map((n) => n.toString(16).padStart(2, "0"));
+    return `${h[0]}${h[1]}${h[2]}${h[3]}-${h[4]}${h[5]}-${h[6]}${h[7]}-${h[8]}${h[9]}-${h[10]}${h[11]}${h[12]}${h[13]}${h[14]}${h[15]}`;
+  };
+})();
+
+/** Mesmo host da pagina (PC ou celular na LAN); localhost no telefone apontaria para o proprio aparelho. */
+const API_BASE =
+  typeof window !== "undefined" && (window.location?.protocol === "http:" || window.location?.protocol === "https:")
+    ? `${window.location.protocol}//${window.location.hostname}:3001`
+    : "http://localhost:3001";
+/** Build tag visivel para confirmar JS atual no celular. Erros vao para o console (Eruda no mobile). */
+const APP_BUILD_TAG = "build-2026-05-09T08:46-badge-only";
+function debugLog(message) {
+  try { console.log("[JANA]", message); } catch (_) {}
+}
+function mountBuildBadge() {
+  if (document.getElementById("__buildBadge")) return;
+  const tag = document.createElement("div");
+  tag.id = "__buildBadge";
+  tag.textContent = APP_BUILD_TAG;
+  tag.style.cssText =
+    "position:fixed;left:50%;top:0;transform:translateX(-50%);z-index:2147483647;font:11px/1.3 monospace;color:#fff;background:#d12;padding:4px 8px;border-radius:0 0 8px 8px;pointer-events:none;max-width:90vw;white-space:nowrap;margin:0;text-align:center;";
+  (document.body || document.documentElement).appendChild(tag);
+}
+if (typeof window !== "undefined") {
+  if (document.readyState === "loading") {
+    window.addEventListener("DOMContentLoaded", mountBuildBadge);
+  } else {
+    mountBuildBadge();
+  }
+}
+/** Comanda nova ainda nao gravada no json-server (so apos primeiro item). */
+const PENDING_ORDER_ID = "__pending__";
+let _pendingOrderPostChain = Promise.resolve();
+/** Botao Adicionar item: estado de pressao para feedback visual. */
+let addProductPressTarget = null;
+/** Atualiza cronometros na lista da comanda (1s) */
+let orderItemsTimerInterval = null;
+const THEME_PRESETS = {
+  "light-pro": { label: "Light Pro", description: "Claro neutro" },
+  "dark-pro": { label: "Dark Pro", description: "Escuro confortavel" },
+  apple: { label: "Apple", description: "Limpo e sofisticado" },
+  "blue-service": { label: "Blue Service", description: "Azul institucional" },
+  "high-contrast": { label: "High Contrast", description: "Acessibilidade" }
+};
+
+const state = {
+  user: null,
+  selectedFilter: "all",
+  selectedOrderId: null,
+  selectedTab: "dashboardTab",
+  selectedSettingsTab: "products",
+  selectedCategory: "Todas",
+  productSearch: "",
+  detailAction: null,
+  cancelConfirmOpen: false,
+  currentView: "main",
+  pendingNewOrder: null,
+  selectedReport: null,
+  reportDateFrom: "",
+  reportDateTo: "",
+  cashCloseDateYmd: "",
+  cashCloseUiMessage: null,
+  config: {
+    id: 1,
+    useTables: false,
+    useServiceFee: true,
+    activeTheme: "apple",
+    categories: ["Bebidas", "Lanches", "Porcoes", "Pratos", "Sobremesas", "Outros"],
+    prepCategories: [],
+    paymentMethods: [
+      { id: "card", name: "Cartao", active: true },
+      { id: "cash", name: "Dinheiro", active: true },
+      { id: "pix", name: "PIX", active: true },
+      { id: "voucher", name: "Vale Ref.", active: true }
+    ]
+  },
+  cache: {
+    users: [],
+    commandas: [],
+    products: [],
+    config: {
+      id: 1,
+      useTables: false,
+      useServiceFee: true,
+      activeTheme: "apple",
+      categories: ["Bebidas", "Lanches", "Porcoes", "Pratos", "Sobremesas", "Outros"],
+      prepCategories: [],
+      paymentMethods: [
+        { id: "card", name: "Cartao", active: true },
+        { id: "cash", name: "Dinheiro", active: true },
+        { id: "pix", name: "PIX", active: true },
+        { id: "voucher", name: "Vale Ref.", active: true }
+      ]
+    },
+    dailyCloses: []
+  }
+};
+
+const refs = {
+  loginScreen: document.querySelector("#loginScreen"),
+  appScreen: document.querySelector("#appScreen"),
+  appHeader: document.querySelector("#appHeader"),
+  appBottomNav: document.querySelector("#appBottomNav"),
+  mainContent: document.querySelector("#mainContent"),
+  loginForm: document.querySelector("#loginForm"),
+  usernameInput: document.querySelector("#usernameInput"),
+  passwordInput: document.querySelector("#passwordInput"),
+  biometricButton: document.querySelector("#biometricButton"),
+  loginFeedback: document.querySelector("#loginFeedback"),
+  currentUserLabel: document.querySelector("#currentUserLabel"),
+  openSettingsButton: document.querySelector("#openSettingsButton"),
+  logoutButton: document.querySelector("#logoutButton"),
+  activeOrdersCount: document.querySelector("#activeOrdersCount"),
+  dailyRevenueValue: document.querySelector("#dailyRevenueValue"),
+  ordersList: document.querySelector("#ordersList"),
+  statusFilters: [...document.querySelectorAll(".status-filter")],
+  newOrderButton: document.querySelector("#newOrderButton"),
+  homeButton: document.querySelector("#homeButton"),
+  bottomTabs: [...document.querySelectorAll(".bottom-tab")],
+  tabPanels: [...document.querySelectorAll(".tab-panel")],
+  orderDialog: document.querySelector("#orderDialog"),
+  closeOrderDialogButton: document.querySelector("#closeOrderDialogButton"),
+  orderForm: document.querySelector("#orderForm"),
+  orderTableInput: document.querySelector("#orderTableInput"),
+  detailDialog: document.querySelector("#detailDialog"),
+  confirmDetailButton: document.querySelector("#confirmDetailButton"),
+  closeDetailDialogButton: document.querySelector("#closeDetailDialogButton"),
+  detailTitle: document.querySelector("#detailTitle"),
+  detailStatus: document.querySelector("#detailStatus"),
+  detailCustomerInput: document.querySelector("#detailCustomerInput"),
+  detailCustomerFeedback: document.querySelector("#detailCustomerFeedback"),
+  detailCustomerHint: document.querySelector("#detailCustomerHint"),
+  detailCustomerSlotTop: document.querySelector("#detailCustomerSlotTop"),
+  detailCustomerSlotBottom: document.querySelector("#detailCustomerSlotBottom"),
+  detailCustomerSection: document.querySelector("#detailCustomerSection"),
+  saveCustomerButton: document.querySelector("#saveCustomerButton"),
+  addFlowContent: document.querySelector("#addFlowContent"),
+  openCancelFlowButton: document.querySelector("#openCancelFlowButton"),
+  cancelConfirmBox: document.querySelector("#cancelConfirmBox"),
+  confirmCancelOrderButton: document.querySelector("#confirmCancelOrderButton"),
+  dismissCancelOrderButton: document.querySelector("#dismissCancelOrderButton"),
+  productSearchInput: document.querySelector("#productSearchInput"),
+  categoryButtons: document.querySelector("#categoryButtons"),
+  availableProductsList: document.querySelector("#availableProductsList"),
+  orderItemsList: document.querySelector("#orderItemsList"),
+  orderSubtotalLabel: document.querySelector("#orderSubtotalLabel"),
+  checkoutButton: document.querySelector("#checkoutButton"),
+  checkoutDialog: document.querySelector("#checkoutDialog"),
+  closeCheckoutDialogButton: document.querySelector("#closeCheckoutDialogButton"),
+  checkoutSummary: document.querySelector("#checkoutSummary"),
+  checkoutPaymentMethodsList: document.querySelector("#checkoutPaymentMethodsList"),
+  serviceFeeField: document.querySelector("#serviceFeeField"),
+  serviceFeeInput: document.querySelector("#serviceFeeInput"),
+  confirmCheckoutButton: document.querySelector("#confirmCheckoutButton"),
+  checkoutFeedback: document.querySelector("#checkoutFeedback"),
+  productForm: document.querySelector("#productForm"),
+  productIdInput: document.querySelector("#productIdInput"),
+  productSubmitButton: document.querySelector("#productSubmitButton"),
+  productNameInput: document.querySelector("#productNameInput"),
+  productCategoryInput: document.querySelector("#productCategoryInput"),
+  productPriceInput: document.querySelector("#productPriceInput"),
+  productRequiresPrepInput: document.querySelector("#productRequiresPrepInput"),
+  clearProductFormButton: document.querySelector("#clearProductFormButton"),
+  productsList: document.querySelector("#productsList"),
+  tableModeToggle: document.querySelector("#tableModeToggle"),
+  serviceFeeToggle: document.querySelector("#serviceFeeToggle"),
+  orderTableGroup: document.querySelector("#orderTableGroup"),
+  categoryForm: document.querySelector("#categoryForm"),
+  categoryNameInput: document.querySelector("#categoryNameInput"),
+  categoryFeedback: document.querySelector("#categoryFeedback"),
+  categoriesList: document.querySelector("#categoriesList"),
+  settingsTabButtons: [...document.querySelectorAll(".settings-tab-button")],
+  settingsPanels: [...document.querySelectorAll(".settings-panel")],
+  settingsTabsScroll: document.querySelector("#settingsTabsScroll"),
+  settingsTabsLeftHint: document.querySelector("#settingsTabsLeftHint"),
+  settingsTabsRightHint: document.querySelector("#settingsTabsRightHint"),
+  paymentMethodForm: document.querySelector("#paymentMethodForm"),
+  paymentMethodNameInput: document.querySelector("#paymentMethodNameInput"),
+  paymentMethodFeedback: document.querySelector("#paymentMethodFeedback"),
+  paymentMethodsSettingsList: document.querySelector("#paymentMethodsSettingsList"),
+  activeThemeLabel: document.querySelector("#activeThemeLabel"),
+  themePresetList: document.querySelector("#themePresetList"),
+  confirmSettingsButton: document.querySelector("#confirmSettingsButton"),
+  reopenFilterDateInput: document.querySelector("#reopenFilterDateInput"),
+  reopenSearchButton: document.querySelector("#reopenSearchButton"),
+  reopenOrdersList: document.querySelector("#reopenOrdersList"),
+  reopenPanelFeedback: document.querySelector("#reopenPanelFeedback"),
+  reopenConfirmDialog: document.querySelector("#reopenConfirmDialog"),
+  reopenConfirmAcceptButton: document.querySelector("#reopenConfirmAcceptButton"),
+  reopenConfirmDismissButton: document.querySelector("#reopenConfirmDismissButton"),
+  reportsDateFromInput: document.querySelector("#reportsDateFromInput"),
+  reportsDateToInput: document.querySelector("#reportsDateToInput"),
+  reportsPicker: document.querySelector("#reportsPicker"),
+  reportsDetail: document.querySelector("#reportsDetail"),
+  reportsDetailBody: document.querySelector("#reportsDetailBody"),
+  reportsBackButton: document.querySelector("#reportsBackButton")
+};
+
+function formatCurrency(value) {
+  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
+}
+
+async function apiGet(path) {
+  const response = await fetch(`${API_BASE}${path}`);
+  if (!response.ok) throw new Error(`GET ${path} failed`);
+  return response.json();
+}
+
+async function apiPost(path, body) {
+  const response = await fetch(`${API_BASE}${path}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body)
+  });
+  if (!response.ok) throw new Error(`POST ${path} failed`);
+  return response.json();
+}
+
+async function apiPatch(path, body) {
+  const response = await fetch(`${API_BASE}${path}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body)
+  });
+  if (!response.ok) throw new Error(`PATCH ${path} failed`);
+  return response.json();
+}
+
+async function apiDelete(path) {
+  const response = await fetch(`${API_BASE}${path}`, { method: "DELETE" });
+  if (!response.ok) throw new Error(`DELETE ${path} failed`);
+}
+
+async function bootstrapFromApi() {
+  const [users, products, commandas] = await Promise.all([
+    apiGet("/users"),
+    apiGet("/products"),
+    apiGet("/commandas")
+  ]);
+  let dailyCloses = [];
+  try {
+    dailyCloses = await apiGet("/dailyCloses");
+  } catch (_) {
+    dailyCloses = [];
+  }
+  let config = {
+    id: 1,
+    useTables: false,
+    useServiceFee: true,
+    activeTheme: "apple",
+    categories: ["Bebidas", "Lanches", "Porcoes", "Pratos", "Sobremesas", "Outros"],
+    prepCategories: [],
+    paymentMethods: [
+      { id: "card", name: "Cartao", active: true },
+      { id: "cash", name: "Dinheiro", active: true },
+      { id: "pix", name: "PIX", active: true },
+      { id: "voucher", name: "Vale Ref.", active: true }
+    ]
+  };
+  try {
+    config = await apiGet("/config/1");
+  } catch (_) {
+    config = await apiPost("/config", config);
+  }
+  state.cache.users = users;
+  state.cache.products = products;
+  state.cache.commandas = commandas;
+  state.cache.config = config;
+  state.cache.dailyCloses = Array.isArray(dailyCloses) ? dailyCloses : [];
+}
+
+function loadProducts() {
+  return state.cache.products;
+}
+
+function saveProducts(products) {
+  state.cache.products = products;
+  void Promise.all(
+    products.map((product) => {
+      if (product.id !== undefined && product.id !== null && product.id !== "") return apiPatch(`/products/${product.id}`, product);
+      return Promise.resolve();
+    })
+  );
+}
+
+function loadOrders() {
+  return state.cache.commandas;
+}
+
+function saveOrders(orders) {
+  state.cache.commandas = orders;
+  void Promise.all(
+    orders.map((order) => {
+      if (order.id !== undefined && order.id !== null && order.id !== "") return apiPatch(`/commandas/${order.id}`, order);
+      return Promise.resolve();
+    })
+  );
+}
+
+function loadDailyCloses() {
+  return state.cache.dailyCloses || [];
+}
+
+function getLastDailyCloseIso(dateYmd) {
+  const list = loadDailyCloses().filter((entry) => String(entry.dateYmd) === String(dateYmd) && entry.closedAt);
+  if (!list.length) return null;
+  return list
+    .map((entry) => entry.closedAt)
+    .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())[0];
+}
+
+/** Valores como no painel Inicio: comandas abertas (so no dia corrente) + total bruto do dia (finalizadas na data). */
+function computeCashCloseDraft(dateYmd) {
+  const orders = loadOrders();
+  const today = todayLocalYmd();
+  const slice = finalizedOrdersInLocalDateRange(orders, dateYmd, dateYmd);
+  const totalBruto = slice.reduce((s, o) => s + (o.totalPaid || 0), 0);
+  const finalizedOrdersCount = slice.length;
+  const activeOrdersCount =
+    dateYmd === today ? orders.filter((o) => normalizeOrderStatus(o.status) === "Aberta").length : null;
+  return { dateYmd, activeOrdersCount, totalBruto, finalizedOrdersCount };
+}
+
+async function persistDailyClose(draft) {
+  const list = [...loadDailyCloses()];
+  const closedAt = new Date().toISOString();
+  const payload = {
+    dateYmd: draft.dateYmd,
+    closedAt,
+    activeOrdersCount: draft.activeOrdersCount,
+    totalBruto: draft.totalBruto,
+    finalizedOrdersCount: draft.finalizedOrdersCount
+  };
+  const existing = list.find((e) => String(e.dateYmd) === String(draft.dateYmd));
+  let saved;
+  if (existing && existing.id != null && existing.id !== "") {
+    saved = await apiPatch(`/dailyCloses/${existing.id}`, payload);
+    const idx = list.findIndex((e) => String(e.id) === String(existing.id));
+    if (idx >= 0) list[idx] = saved;
+  } else {
+    saved = await apiPost("/dailyCloses", payload);
+    list.unshift(saved);
+  }
+  state.cache.dailyCloses = list;
+}
+
+function loadConfig() {
+  const fallback = {
+    id: 1,
+    useTables: false,
+    useServiceFee: true,
+    activeTheme: "apple",
+    categories: ["Bebidas", "Lanches", "Porcoes", "Pratos", "Sobremesas", "Outros"],
+    prepCategories: [],
+    paymentMethods: [
+      { id: "card", name: "Cartao", active: true },
+      { id: "cash", name: "Dinheiro", active: true },
+      { id: "pix", name: "PIX", active: true },
+      { id: "voucher", name: "Vale Ref.", active: true }
+    ]
+  };
+  const config = state.cache.config || fallback;
+  return {
+    ...fallback,
+    ...config,
+    activeTheme: THEME_PRESETS[config.activeTheme] ? config.activeTheme : fallback.activeTheme,
+    categories: Array.isArray(config.categories) && config.categories.length ? config.categories : fallback.categories,
+    prepCategories: Array.isArray(config.prepCategories) ? config.prepCategories : fallback.prepCategories,
+    paymentMethods: Array.isArray(config.paymentMethods) && config.paymentMethods.length ? config.paymentMethods : fallback.paymentMethods
+  };
+}
+
+function saveConfig(config) {
+  state.cache.config = config;
+  void apiPatch(`/config/${config.id || 1}`, config);
+}
+
+function applyTheme() {
+  const theme = state.config.activeTheme || "apple";
+  document.documentElement.setAttribute("data-theme", theme);
+}
+
+function updateSettingsTabsHints() {
+  if (!refs.settingsTabsScroll || !refs.settingsTabsLeftHint || !refs.settingsTabsRightHint) return;
+  const scroller = refs.settingsTabsScroll;
+  const maxScrollLeft = Math.max(0, scroller.scrollWidth - scroller.clientWidth);
+  const hasOverflow = maxScrollLeft > 2;
+  const showLeft = hasOverflow && scroller.scrollLeft > 4;
+  const showRight = hasOverflow && scroller.scrollLeft < (maxScrollLeft - 4);
+  refs.settingsTabsLeftHint.classList.toggle("show", showLeft);
+  refs.settingsTabsRightHint.classList.toggle("show", showRight);
+}
+
+function isPendingLocalOrder() {
+  return state.pendingNewOrder != null && state.selectedOrderId === PENDING_ORDER_ID;
+}
+
+function getCurrentOrder() {
+  if (isPendingLocalOrder()) return state.pendingNewOrder;
+  return loadOrders().find((order) => String(order.id) === String(state.selectedOrderId));
+}
+
+function calculateOrderSubtotal(order) {
+  const items = order.items || [];
+  return items.reduce((sum, item) => sum + item.price * item.qty, 0);
+}
+
+function calculatePaidToday(orders) {
+  const today = todayLocalYmd();
+  const lastCloseIso = getLastDailyCloseIso(today);
+  return orders
+    .filter((order) => {
+      if (normalizeOrderStatus(order.status) !== "Finalizado") return false;
+      const closedIso = order.closedAt || order.createdAt;
+      if (localYmdFromIso(closedIso) !== today) return false;
+      if (!lastCloseIso) return true;
+      return new Date(closedIso).getTime() > new Date(lastCloseIso).getTime();
+    })
+    .reduce((sum, order) => sum + (order.totalPaid || 0), 0);
+}
+
+/** Soma totalPaid de comandas finalizadas com closedAt na faixa de datas locais [fromYmd, toYmd] inclusive. */
+function calculatePaidInDateRange(orders, fromYmd, toYmd) {
+  if (!fromYmd || !toYmd) return 0;
+  return orders
+    .filter((order) => {
+      if (normalizeOrderStatus(order.status) !== "Finalizado") return false;
+      const day = localYmdFromIso(order.closedAt || order.createdAt);
+      return day >= fromYmd && day <= toYmd;
+    })
+    .reduce((sum, order) => sum + (order.totalPaid || 0), 0);
+}
+
+function finalizedOrdersInLocalDateRange(orders, fromYmd, toYmd) {
+  if (!fromYmd || !toYmd) return [];
+  return orders.filter((order) => {
+    if (normalizeOrderStatus(order.status) !== "Finalizado") return false;
+    const day = localYmdFromIso(order.closedAt || order.createdAt);
+    return day >= fromYmd && day <= toYmd;
+  });
+}
+
+const WEEKDAY_LABELS_PT = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sab"];
+
+/**
+ * Distribui totalPaid entre as formas marcadas (rateio igual; 1 metodo = 100%).
+ * @returns {Record<string, number>}
+ */
+function aggregatePaymentMethodShares(orders) {
+  const map = Object.create(null);
+  for (const order of orders) {
+    const total = order.totalPaid || 0;
+    const names = (order.paymentMethods || []).filter(Boolean);
+    if (!names.length || total <= 0) continue;
+    const share = total / names.length;
+    for (const name of names) {
+      map[name] = (map[name] || 0) + share;
+    }
+  }
+  return map;
+}
+
+/**
+ * Soma de qty por productId (fallback name) nos itens das comandas.
+ * @returns {Array<{ key: string, name: string, qty: number, revenue: number }>}
+ */
+function aggregateTopProducts(orders, limit = 15) {
+  const byKey = new Map();
+  for (const order of orders) {
+    for (const item of order.items || []) {
+      const key = item.productId != null && item.productId !== "" ? `id:${item.productId}` : `name:${item.name || ""}`;
+      const cur = byKey.get(key) || { name: item.name || key, qty: 0, revenue: 0 };
+      cur.qty += item.qty || 0;
+      cur.revenue += (item.price || 0) * (item.qty || 0);
+      if (item.name) cur.name = item.name;
+      byKey.set(key, cur);
+    }
+  }
+  return [...byKey.values()]
+    .sort((a, b) => b.qty - a.qty)
+    .slice(0, limit);
+}
+
+/** Contagem de comandas e soma de faturamento por hora local (0-23) no instante de fechamento. */
+function aggregatePeakHour(orders) {
+  const counts = Array.from({ length: 24 }, () => 0);
+  const revenue = Array.from({ length: 24 }, () => 0);
+  for (const order of orders) {
+    const iso = order.closedAt || order.createdAt;
+    if (!iso) continue;
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) continue;
+    const h = d.getHours();
+    counts[h] += 1;
+    revenue[h] += order.totalPaid || 0;
+  }
+  let maxIdx = 0;
+  for (let i = 1; i < 24; i++) {
+    if (counts[i] > counts[maxIdx]) maxIdx = i;
+  }
+  return { counts, revenue, peakHourIndex: counts.some((c) => c > 0) ? maxIdx : null };
+}
+
+/** Contagem e faturamento por dia da semana local (0 = domingo). */
+function aggregateWeekday(orders) {
+  const counts = Array.from({ length: 7 }, () => 0);
+  const revenue = Array.from({ length: 7 }, () => 0);
+  for (const order of orders) {
+    const iso = order.closedAt || order.createdAt;
+    if (!iso) continue;
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) continue;
+    const wd = d.getDay();
+    counts[wd] += 1;
+    revenue[wd] += order.totalPaid || 0;
+  }
+  let maxIdx = 0;
+  for (let i = 1; i < 7; i++) {
+    if (counts[i] > counts[maxIdx]) maxIdx = i;
+  }
+  return { counts, revenue, peakWeekdayIndex: counts.some((c) => c > 0) ? maxIdx : null };
+}
+
+function paymentSharesSorted(map) {
+  return Object.entries(map)
+    .map(([name, value]) => ({ name, value }))
+    .sort((a, b) => b.value - a.value);
+}
+
+function categoryRequiresPrep(category) {
+  return (state.config.prepCategories || []).includes(category);
+}
+
+function normalizeOrderStatus(status) {
+  if (status === "Finalizado" || status === "Cancelada" || status === "Aberta") return status;
+  // Compatibilidade com status legado.
+  if (status === "Aguardando" || status === "Em curso") return "Aberta";
+  return "Aberta";
+}
+
+function deriveOrderStatus(order) {
+  if (order.status === "Finalizado" || order.status === "Cancelada") return order.status;
+  return "Aberta";
+}
+
+function formatTimeShort(isoDate) {
+  if (!isoDate) return "";
+  return new Date(isoDate).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+}
+
+function formatElapsedSince(isoDate) {
+  if (!isoDate) return "";
+  const diffMs = Date.now() - new Date(isoDate).getTime();
+  const diffMin = Math.max(0, Math.floor(diffMs / 60000));
+  if (diffMin < 1) return "agora";
+  if (diffMin < 60) return `${diffMin}min`;
+  const h = Math.floor(diffMin / 60);
+  const m = diffMin % 60;
+  return `${h}h ${m}min`;
+}
+
+/** Cronometro mm:ss desde o instante ISO (exibe subida em tempo real). */
+function formatElapsedClock(isoDate) {
+  if (!isoDate) return "00:00";
+  const diffMs = Date.now() - new Date(isoDate).getTime();
+  const sec = Math.max(0, Math.floor(diffMs / 1000));
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+}
+
+function formatDurationFromSeconds(totalSec) {
+  if (totalSec == null || Number.isNaN(totalSec)) return "";
+  const sec = Math.max(0, Math.floor(totalSec));
+  if (sec < 60) return `${sec}s`;
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return s ? `${m}min ${s}s` : `${m}min`;
+}
+
+/** Garante lineId em cada linha da comanda (itens antigos). Retorna true se alterou. */
+function ensureLineIds(order) {
+  if (!order?.items?.length) return false;
+  let changed = false;
+  for (const item of order.items) {
+    if (!item.lineId) {
+      item.lineId = crypto.randomUUID();
+      changed = true;
+    }
+  }
+  return changed;
+}
+
+function computeServiceSeconds(requestedAt, deliveredAt) {
+  if (!requestedAt || !deliveredAt) return null;
+  const a = new Date(requestedAt).getTime();
+  const b = new Date(deliveredAt).getTime();
+  if (Number.isNaN(a) || Number.isNaN(b)) return null;
+  return Math.max(0, Math.round((b - a) / 1000));
+}
+
+function syncOrderLineTimerElements() {
+  document.querySelectorAll(".order-line-timer[data-requested-at]").forEach((el) => {
+    const iso = el.dataset.requestedAt;
+    if (!iso) return;
+    el.textContent = formatElapsedClock(iso);
+  });
+}
+
+function syncOrderItemsTimerInterval() {
+  if (orderItemsTimerInterval) {
+    clearInterval(orderItemsTimerInterval);
+    orderItemsTimerInterval = null;
+  }
+  const onDetail = state.currentView === "detail";
+  const order = getCurrentOrder();
+  const status = order ? normalizeOrderStatus(order.status) : "";
+  const openOrder = onDetail && order && status === "Aberta";
+  const hasRunning = openOrder && (order.items || []).some((item) => item.requestedAt && !item.deliveredAt);
+  if (!hasRunning) return;
+  orderItemsTimerInterval = window.setInterval(() => {
+    if (state.currentView !== "detail") {
+      syncOrderItemsTimerInterval();
+      return;
+    }
+    syncOrderLineTimerElements();
+  }, 1000);
+}
+
+function markLineDelivered(lineId) {
+  if (!lineId) return;
+  const order = getCurrentOrder();
+  if (!order) return;
+  const status = normalizeOrderStatus(order.status);
+  if (status !== "Aberta") return;
+  const item = order.items.find((entry) => String(entry.lineId) === String(lineId));
+  if (!item || item.deliveredAt) return;
+  item.deliveredAt = new Date().toISOString();
+  item.serviceSeconds = computeServiceSeconds(item.requestedAt, item.deliveredAt);
+
+  if (isPendingLocalOrder()) {
+    renderDashboard();
+    renderOrderDetails();
+    return;
+  }
+  saveOrders(loadOrders());
+  renderDashboard();
+  renderOrderDetails();
+}
+
+function formatOrderIdentification(order) {
+  const customerName = order.customer?.trim() || "Cliente sem nome";
+  if (state.config.useTables) {
+    return `${customerName} - ${order.table || "Sem mesa"}`;
+  }
+  return customerName;
+}
+
+function formatOrderSubline(order) {
+  const createdAt = new Date(order.createdAt).toLocaleString("pt-BR");
+  if (state.config.useTables) {
+    return `${order.table || "Sem mesa"} • ${createdAt}`;
+  }
+  return createdAt;
+}
+
+/** Data local YYYY-MM-DD (input type="date"). */
+function todayLocalYmd() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+/** Converte instante ISO para data local YYYY-MM-DD. */
+function localYmdFromIso(isoString) {
+  if (!isoString) return "";
+  const d = new Date(isoString);
+  if (Number.isNaN(d.getTime())) return "";
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+/** Data usada para filtrar reabertura: fechamento, cancelamento ou criacao (fallback). */
+function orderReopenEventYmd(order) {
+  const st = normalizeOrderStatus(order.status);
+  if (st === "Finalizado") return localYmdFromIso(order.closedAt || order.createdAt);
+  if (st === "Cancelada") return localYmdFromIso(order.canceledAt || order.createdAt);
+  return "";
+}
+
+function performReopenOrder(orderId) {
+  const orders = loadOrders();
+  const target = orders.find((o) => String(o.id) === String(orderId));
+  if (!target) return false;
+  const st = normalizeOrderStatus(target.status);
+  if (st !== "Finalizado" && st !== "Cancelada") return false;
+  target.status = "Aberta";
+  delete target.closedAt;
+  delete target.canceledAt;
+  if (st === "Finalizado") {
+    target.totalPaid = 0;
+    target.paymentMethods = [];
+  }
+  saveOrders(orders);
+  void apiPatch(`/commandas/${target.id}`, target).catch(() => {});
+  return true;
+}
+
+function openReopenConfirmDialog(orderId) {
+  if (!refs.reopenConfirmDialog || !refs.reopenConfirmAcceptButton) return;
+  refs.reopenConfirmAcceptButton.dataset.orderId = String(orderId);
+  refs.reopenConfirmDialog.showModal();
+}
+
+function renderReopenPanel() {
+  if (!refs.reopenOrdersList) return;
+  refs.reopenPanelFeedback.textContent = "";
+  let dateVal = (refs.reopenFilterDateInput?.value || "").trim();
+  if (!dateVal) {
+    dateVal = todayLocalYmd();
+    if (refs.reopenFilterDateInput) refs.reopenFilterDateInput.value = dateVal;
+  }
+  const orders = loadOrders();
+  const matches = orders.filter((order) => {
+    const st = normalizeOrderStatus(order.status);
+    if (st !== "Finalizado" && st !== "Cancelada") return false;
+    return orderReopenEventYmd(order) === dateVal;
+  });
+  if (!matches.length) {
+    refs.reopenOrdersList.innerHTML =
+      "<li class='rounded-lg border border-outline-variant bg-surface-container-high p-3 text-sm text-on-surface-variant'>Nenhuma comanda finalizada ou cancelada nesta data.</li>";
+    return;
+  }
+  refs.reopenOrdersList.innerHTML = matches
+    .map((order) => {
+      const st = normalizeOrderStatus(order.status);
+      const eventIso = st === "Finalizado" ? order.closedAt || order.createdAt : order.canceledAt || order.createdAt;
+      const when = eventIso ? new Date(eventIso).toLocaleString("pt-BR") : "";
+      const subtotal = calculateOrderSubtotal(order);
+      const badge =
+        st === "Finalizado"
+          ? "bg-secondary-container text-on-secondary-container"
+          : "bg-error-container text-error";
+      return `
+        <li class="rounded-lg border border-outline-variant p-3">
+          <div class="flex items-start justify-between gap-2">
+            <div>
+              <p class="text-sm font-bold text-on-surface">${order.customer?.trim() || "Cliente sem nome"}</p>
+              <p class="text-xs text-on-surface-variant">${when} • ${formatCurrency(subtotal)}</p>
+            </div>
+            <span class="shrink-0 rounded-md px-2 py-0.5 text-[10px] font-bold ${badge}">${st}</span>
+          </div>
+          <button type="button" class="reopen-single-order-button mt-2 h-10 w-full rounded-lg border border-primary text-sm font-bold text-primary" data-order-id="${order.id}">Reabrir comanda</button>
+        </li>
+      `;
+    })
+    .join("");
+
+  document.querySelectorAll(".reopen-single-order-button").forEach((btn) => {
+    btn.addEventListener("click", () => openReopenConfirmDialog(btn.dataset.orderId));
+  });
+}
+
+function serializeCommandaForPost(order) {
+  return {
+    table: order.table || "",
+    customer: order.customer || "",
+    status: order.status || "Aberta",
+    items: order.items || [],
+    paymentMethods: order.paymentMethods || [],
+    serviceFeePercent: order.serviceFeePercent ?? 10,
+    totalPaid: order.totalPaid ?? 0,
+    createdAt: order.createdAt,
+    everHadItems: order.everHadItems === true
+  };
+}
+
+async function persistPendingOrderToServer() {
+  const order = state.pendingNewOrder;
+  if (!order) return;
+  const created = await apiPost("/commandas", serializeCommandaForPost(order));
+  const orders = loadOrders();
+  const merged = { ...created, everHadItems: true };
+  orders.unshift(merged);
+  state.cache.commandas = orders;
+  state.pendingNewOrder = null;
+  state.selectedOrderId = merged.id;
+  saveOrders(orders);
+}
+
+function persistOrderTableFromDetail() {
+  if (!state.config.useTables || !refs.orderTableInput) return;
+  const order = getCurrentOrder();
+  if (!order) return;
+  const table = refs.orderTableInput.value.trim();
+  if (isPendingLocalOrder()) {
+    state.pendingNewOrder.table = table;
+    return;
+  }
+  const orders = loadOrders();
+  const target = orders.find((entry) => String(entry.id) === String(order.id));
+  if (!target) return;
+  target.table = table;
+  saveOrders(orders);
+}
+
+function createNewOrderAndOpen() {
+  state.pendingNewOrder = {
+    table: "",
+    customer: "",
+    status: "Aberta",
+    items: [],
+    paymentMethods: [],
+    serviceFeePercent: 10,
+    totalPaid: 0,
+    createdAt: new Date().toISOString(),
+    everHadItems: false
+  };
+  state.selectedOrderId = PENDING_ORDER_ID;
+  state.currentView = "detail";
+  state.detailAction = "add";
+  state.cancelConfirmOpen = false;
+  renderAll();
+}
+
+function setLoggedUser(user) {
+  state.user = user;
+}
+
+function clearLoggedUser() {
+  state.user = null;
+  state.pendingNewOrder = null;
+  state.selectedOrderId = null;
+}
+
+function renderAuth() {
+  if (state.user) {
+    refs.loginScreen.classList.add("hidden");
+    refs.appScreen.classList.remove("hidden");
+    refs.currentUserLabel.textContent = `${state.user.username} (${state.user.role})`;
+    state.pendingNewOrder = null;
+    if (state.selectedOrderId === PENDING_ORDER_ID) state.selectedOrderId = null;
+    state.currentView = "main";
+    renderAll();
+  } else {
+    refs.loginScreen.classList.remove("hidden");
+    refs.appScreen.classList.add("hidden");
+  }
+}
+
+function renderDashboard() {
+  const orders = loadOrders();
+  const today = todayLocalYmd();
+  const lastCloseIso = getLastDailyCloseIso(today);
+  const active = orders.filter((order) => {
+    if (normalizeOrderStatus(order.status) !== "Aberta") return false;
+    if (!lastCloseIso) return true;
+    const createdIso = order.createdAt;
+    if (!createdIso) return false;
+    return new Date(createdIso).getTime() > new Date(lastCloseIso).getTime();
+  });
+
+  refs.activeOrdersCount.textContent = String(active.length);
+  refs.dailyRevenueValue.textContent = formatCurrency(calculatePaidToday(orders));
+
+  const filtered = orders.filter((order) => {
+    if (state.selectedFilter === "all") return true;
+    return normalizeOrderStatus(order.status) === state.selectedFilter;
+  });
+
+  if (!filtered.length) {
+    refs.ordersList.innerHTML = "<li class='rounded-xl border border-outline-variant bg-surface-container-lowest p-4 text-sm text-on-surface-variant'>Nenhuma comanda neste filtro.</li>";
+    return;
+  }
+
+  refs.ordersList.innerHTML = filtered
+    .map((order) => {
+      const subtotal = calculateOrderSubtotal(order);
+      const status = normalizeOrderStatus(order.status);
+      const badgeColor = status === "Finalizado"
+        ? "bg-secondary-container text-on-secondary-container"
+        : status === "Cancelada"
+          ? "bg-error-container text-error"
+          : "bg-primary-fixed text-on-primary-fixed-variant";
+      const isLocked = status === "Finalizado" || status === "Cancelada";
+      return `
+        <li class="rounded-xl border border-outline-variant bg-surface-container-lowest p-3 shadow-sm">
+          <div class="flex items-start justify-between">
+            <div>
+              <p class="text-base font-bold text-primary">${order.customer?.trim() || "Cliente sem nome"}</p>
+              <p class="text-xs text-on-surface-variant">${formatOrderSubline(order)}</p>
+            </div>
+            <span class="rounded-lg px-2 py-1 text-xs font-semibold ${badgeColor}">${status}</span>
+          </div>
+          <p class="mt-3 text-sm font-extrabold text-primary">${formatCurrency(subtotal)}</p>
+          <div class="mt-3 grid grid-cols-2 gap-2">
+            <button class="order-open-button h-touch-target-min w-full rounded-xl bg-primary text-sm font-bold text-on-primary ${isLocked ? "opacity-50" : ""}" data-order-id="${order.id}" ${isLocked ? "disabled" : ""}>Abrir</button>
+            <button class="order-finalize-button h-touch-target-min w-full rounded-xl border border-outline-variant bg-surface text-sm font-bold text-primary ${isLocked || status !== "Aberta" || !order.items?.length ? "opacity-50" : ""}" data-order-id="${order.id}" ${isLocked || status !== "Aberta" || !order.items?.length ? "disabled" : ""}>Finalizar</button>
+          </div>
+        </li>
+      `;
+    })
+    .join("");
+
+  document.querySelectorAll(".order-open-button").forEach((button) => {
+    button.addEventListener("click", () => openDetailDialog(button.dataset.orderId));
+  });
+  document.querySelectorAll(".order-finalize-button").forEach((button) => {
+    button.addEventListener("click", () => void beginFinalizeFlowForOrderId(button.dataset.orderId));
+  });
+}
+
+function renderBottomTabs() {
+  refs.tabPanels.forEach((panel) => panel.classList.add("hidden"));
+  document.querySelector(`#${state.selectedTab}`)?.classList.remove("hidden");
+
+  refs.bottomTabs.forEach((tab) => {
+    const selected = tab.dataset.tab === state.selectedTab;
+    tab.className = selected
+      ? "bottom-tab bottom-tab--active flex flex-1 items-center justify-center rounded-[0.875rem] bg-primary-container text-on-primary-container transition active:scale-[0.98]"
+      : "bottom-tab flex flex-1 items-center justify-center rounded-[0.875rem] text-on-surface-variant transition active:scale-[0.98] hover:bg-surface-container-high/60";
+    tab.setAttribute("aria-selected", selected ? "true" : "false");
+  });
+}
+
+function renderView() {
+  const onMain = state.currentView === "main";
+  const onDetail = state.currentView === "detail";
+  const onCheckout = state.currentView === "checkout";
+
+  refs.mainContent.classList.toggle("hidden", !onMain);
+  refs.appHeader.classList.toggle("hidden", !onMain);
+  refs.appBottomNav.classList.toggle("hidden", !onMain);
+  refs.detailDialog.classList.toggle("hidden", !onDetail);
+  refs.checkoutDialog.classList.toggle("hidden", !onCheckout);
+  syncOrderItemsTimerInterval();
+}
+
+function renderProductCategoryOptions() {
+  const categories = state.config.categories || [];
+  const current = refs.productCategoryInput.value;
+  refs.productCategoryInput.innerHTML = [
+    "<option value=''>Selecione uma categoria</option>",
+    ...categories.map((category) => `<option value="${category}">${category}</option>`)
+  ].join("");
+  if (current && categories.includes(current)) {
+    refs.productCategoryInput.value = current;
+  }
+}
+
+function renderSettings() {
+  refs.settingsPanels.forEach((panel) => panel.classList.add("hidden"));
+  const panelMap = {
+    products: document.querySelector("#productsSettingsPanel"),
+    operation: document.querySelector("#operationSettingsPanel"),
+    categories: document.querySelector("#categoriesSettingsPanel"),
+    payments: document.querySelector("#paymentsSettingsPanel"),
+    reopen: document.querySelector("#reopenSettingsPanel"),
+    theme: document.querySelector("#themeSettingsPanel")
+  };
+  panelMap[state.selectedSettingsTab]?.classList.remove("hidden");
+  refs.settingsTabButtons.forEach((button) => {
+    const selected = button.dataset.settingsTab === state.selectedSettingsTab;
+    button.className = selected
+      ? "settings-tab-button h-10 flex-1 rounded-full bg-primary-container px-3 text-xs font-bold text-on-primary-container"
+      : "settings-tab-button h-10 flex-1 rounded-full bg-surface-container-high px-3 text-xs font-bold text-on-surface-variant";
+  });
+  updateSettingsTabsHints();
+
+  refs.tableModeToggle.checked = !!state.config.useTables;
+  refs.serviceFeeToggle.checked = !!state.config.useServiceFee;
+  refs.serviceFeeField?.classList.toggle("hidden", !state.config.useServiceFee);
+  renderProductCategoryOptions();
+
+  refs.categoriesList.innerHTML = (state.config.categories || [])
+    .map((category) => `
+      <li class="flex items-center justify-between rounded-lg border border-outline-variant px-3 py-2">
+        <div class="flex items-center gap-2">
+          <input class="category-prep-toggle h-4 w-4" type="checkbox" data-category="${category}" ${categoryRequiresPrep(category) ? "checked" : ""}>
+          <span class="text-sm font-semibold text-on-surface">${category}</span>
+          <span class="text-[10px] text-on-surface-variant">preparo</span>
+        </div>
+        <button class="delete-category-button h-8 rounded-md border border-error-container bg-error-container px-2 text-xs font-bold text-error" data-category="${category}">Excluir</button>
+      </li>
+    `)
+    .join("");
+
+  document.querySelectorAll(".category-prep-toggle").forEach((toggle) => {
+    toggle.addEventListener("change", () => {
+      const category = toggle.dataset.category;
+      if (!category) return;
+      const next = new Set(state.config.prepCategories || []);
+      if (toggle.checked) next.add(category);
+      else next.delete(category);
+      state.config.prepCategories = [...next];
+      saveConfig(state.config);
+      renderAll();
+    });
+  });
+
+  document.querySelectorAll(".delete-category-button").forEach((button) => {
+    button.addEventListener("click", () => deleteCategory(button.dataset.category));
+  });
+
+  refs.paymentMethodsSettingsList.innerHTML = (state.config.paymentMethods || [])
+    .map((method) => `
+      <li class="flex items-center justify-between gap-2 rounded-lg border border-outline-variant px-3 py-2">
+        <div class="flex items-center gap-2">
+          <input class="payment-method-active-toggle h-4 w-4" type="checkbox" data-method-id="${method.id}" ${method.active ? "checked" : ""}>
+          <span class="text-sm font-semibold text-on-surface">${method.name}</span>
+        </div>
+        <button class="delete-payment-method-button h-8 rounded-md border border-error-container bg-error-container px-2 text-xs font-bold text-error" data-method-id="${method.id}">Excluir</button>
+      </li>
+    `)
+    .join("");
+
+  document.querySelectorAll(".payment-method-active-toggle").forEach((toggle) => {
+    toggle.addEventListener("change", () => {
+      const target = state.config.paymentMethods.find((method) => method.id === toggle.dataset.methodId);
+      if (!target) return;
+      target.active = toggle.checked;
+      saveConfig(state.config);
+      renderCheckoutPaymentMethods();
+    });
+  });
+  document.querySelectorAll(".delete-payment-method-button").forEach((button) => {
+    button.addEventListener("click", () => deletePaymentMethod(button.dataset.methodId));
+  });
+
+  refs.activeThemeLabel.textContent = `Tema ativo: ${THEME_PRESETS[state.config.activeTheme]?.label || "Apple"}`;
+  refs.themePresetList.innerHTML = Object.entries(THEME_PRESETS)
+    .map(([key, preset]) => `
+      <button class="theme-preset-button rounded-xl border p-2 text-left ${state.config.activeTheme === key ? "border-outline bg-primary-container text-on-primary-container" : "border-outline-variant bg-surface text-on-surface"}" data-theme-key="${key}">
+        <div class="theme-mini-card relative overflow-hidden rounded-lg border border-outline-variant p-2" data-theme-preview="${key}">
+          <div class="mb-2 h-2 w-16 rounded-full bg-primary"></div>
+          <div class="space-y-1">
+            <div class="h-2 w-full rounded bg-surface-container-high"></div>
+            <div class="h-2 w-4/5 rounded bg-surface-container-high"></div>
+          </div>
+          <div class="mt-2 flex gap-1">
+            <div class="h-5 w-12 rounded bg-primary"></div>
+            <div class="h-5 w-10 rounded border border-outline-variant bg-surface"></div>
+          </div>
+        </div>
+        <p class="mt-2 text-sm font-bold">${preset.label}</p>
+        <p class="text-xs opacity-80">${preset.description}</p>
+      </button>
+    `)
+    .join("");
+  refs.themePresetList.querySelectorAll(".theme-mini-card").forEach((card) => {
+    card.setAttribute("data-theme", card.dataset.themePreview || "apple");
+  });
+  document.querySelectorAll(".theme-preset-button").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.config.activeTheme = button.dataset.themeKey;
+      saveConfig(state.config);
+      applyTheme();
+      renderSettings();
+    });
+  });
+
+  if (state.selectedSettingsTab === "reopen") {
+    renderReopenPanel();
+  }
+}
+
+function renderProductAdmin() {
+  const products = loadProducts();
+
+  if (!products.length) {
+    refs.productsList.innerHTML = "<li class='rounded-xl border border-outline-variant bg-surface-container-lowest p-4 text-sm text-on-surface-variant'>Nenhum produto cadastrado.</li>";
+    return;
+  }
+
+  refs.productsList.innerHTML = products
+    .map((product) => `
+      <li class="rounded-xl border border-outline-variant bg-surface-container-lowest p-3 shadow-sm">
+        <div class="flex items-start justify-between gap-2">
+          <div>
+            <p class="text-sm font-bold text-primary">${product.name}</p>
+            <p class="text-xs text-on-surface-variant">${product.category}</p>
+            <p class="mt-1 text-sm font-extrabold text-primary">${formatCurrency(product.price)}</p>
+          </div>
+          <div class="flex gap-2">
+            <button class="product-edit-button h-10 rounded-lg border border-outline-variant px-3 text-xs font-semibold" data-product-id="${product.id}">Editar</button>
+            <button class="product-delete-button h-10 rounded-lg border border-error-container bg-error-container px-3 text-xs font-semibold text-error" data-product-id="${product.id}">Excluir</button>
+          </div>
+        </div>
+      </li>
+    `)
+    .join("");
+
+  document.querySelectorAll(".product-edit-button").forEach((button) => {
+    button.addEventListener("click", () => fillProductForm(button.dataset.productId));
+  });
+
+  document.querySelectorAll(".product-delete-button").forEach((button) => {
+    button.addEventListener("click", () => deleteProduct(button.dataset.productId));
+  });
+}
+
+function renderCategoryOptions() {
+  if (!refs.categoryButtons) return;
+  const categories = ["Todas", ...new Set(loadProducts().map((product) => product.category))];
+  refs.categoryButtons.innerHTML = categories
+    .map((category) => `
+      <button class="category-filter-button h-10 whitespace-nowrap rounded-full px-3 text-xs font-bold ${category === state.selectedCategory ? "bg-primary-container text-on-primary-container" : "bg-surface-container-high text-on-surface-variant"}" data-category="${category}">
+        ${category}
+      </button>
+    `)
+    .join("");
+  document.querySelectorAll(".category-filter-button").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.selectedCategory = button.dataset.category;
+      renderCategoryOptions();
+      renderOrderDetails();
+    });
+  });
+}
+
+function renderOrderDetails() {
+  const order = getCurrentOrder();
+  if (!order) return;
+  const products = loadProducts();
+
+  if (ensureLineIds(order) && !isPendingLocalOrder()) {
+    saveOrders(loadOrders());
+  }
+
+  refs.detailTitle.textContent = formatOrderIdentification(order);
+  refs.detailStatus.textContent = `Status: ${normalizeOrderStatus(order.status)}`;
+  refs.detailCustomerInput.value = order.customer || "";
+  refs.detailCustomerFeedback.textContent = "";
+
+  const launchMode = state.detailAction === "add";
+  if (refs.detailCustomerHint) {
+    refs.detailCustomerHint.textContent = launchMode
+      ? "Depois de lançar os itens, informe o nome e use Confirmar."
+      : "Visualização da comanda — edite o nome aqui se precisar.";
+  }
+  if (refs.detailCustomerSection && refs.detailCustomerSlotTop && refs.detailCustomerSlotBottom) {
+    if (launchMode) {
+      refs.detailCustomerSlotBottom.appendChild(refs.detailCustomerSection);
+    } else {
+      refs.detailCustomerSlotTop.appendChild(refs.detailCustomerSection);
+    }
+    refs.detailCustomerSlotTop.classList.toggle("hidden", launchMode);
+    refs.detailCustomerSlotBottom.classList.toggle("hidden", !launchMode);
+  }
+
+  const status = normalizeOrderStatus(order.status);
+  const isLocked = status === "Finalizado" || status === "Cancelada";
+
+  if (refs.orderTableGroup) {
+    refs.orderTableGroup.classList.toggle("hidden", !state.config.useTables);
+  }
+  if (refs.orderTableInput) {
+    refs.orderTableInput.value = state.config.useTables ? order.table || "" : "";
+    refs.orderTableInput.disabled = isLocked;
+  }
+  refs.addFlowContent.classList.toggle("hidden", state.detailAction !== "add");
+  refs.cancelConfirmBox.classList.toggle("hidden", !state.cancelConfirmOpen);
+  refs.openCancelFlowButton.disabled = isLocked;
+  refs.openCancelFlowButton.className = isLocked
+    ? "mt-2 h-touch-target-min w-full rounded-xl border border-outline-variant bg-surface-container-high text-sm font-bold text-on-surface-variant opacity-50"
+    : "mt-2 h-touch-target-min w-full rounded-xl border border-error-container bg-surface text-sm font-bold text-error shadow-sm transition active:scale-[0.98]";
+
+  const filteredProducts = products.filter((product) => {
+    const byCategory = state.selectedCategory === "Todas" || product.category === state.selectedCategory;
+    const byName = product.name.toLowerCase().includes(state.productSearch.toLowerCase());
+    return byCategory && byName;
+  });
+
+  refs.availableProductsList.innerHTML = filteredProducts.length
+    ? filteredProducts
+      .map((product) => `
+        <li class="rounded-xl border border-slate-200 p-2">
+          <p class="text-sm font-semibold">${product.name}</p>
+          <p class="text-xs text-slate-500">${product.category} • ${formatCurrency(product.price)}</p>
+          <button type="button" class="add-product-button mt-2 h-10 w-full select-none rounded-lg bg-brand-700 text-sm font-semibold text-white shadow-sm" data-product-id="${product.id}">Adicionar</button>
+        </li>
+      `)
+      .join("")
+    : "<li class='rounded-xl border border-slate-200 p-3 text-sm text-slate-500'>Nenhum produto encontrado.</li>";
+
+  const items = order.items || [];
+  const itemsHtml = items.length
+    ? items
+      .map((item, index) => {
+        const showTimer = item.requestedAt && !item.deliveredAt && !isLocked;
+        const waitLabel =
+          item.deliveredAt && item.requestedAt
+            ? `Entregue ${formatTimeShort(item.deliveredAt)}${
+              item.serviceSeconds != null
+                ? ` • espera ${formatDurationFromSeconds(item.serviceSeconds)}`
+                : ""
+            }`
+            : item.deliveredAt
+              ? `Entregue ${formatTimeShort(item.deliveredAt)}`
+              : "";
+        const showDeliverBtn = !isLocked && item.requestedAt && !item.deliveredAt;
+        const lineIdAttr = item.lineId ? ` data-line-id="${item.lineId}"` : "";
+        return `
+        <li class="rounded-xl border border-slate-200 p-2">
+          <div class="flex items-start justify-between gap-2">
+            <div class="min-w-0 flex-1">
+              <p class="text-sm font-semibold">${item.name}</p>
+              <p class="text-xs text-slate-500">${formatCurrency(item.price)} cada</p>
+              ${
+                showTimer
+                  ? `<p class="order-line-timer mt-0.5 text-[11px] tabular-nums tracking-tight text-on-surface-variant"${lineIdAttr} data-requested-at="${item.requestedAt}">${formatElapsedClock(
+                    item.requestedAt
+                  )}</p>`
+                  : ""
+              }
+              ${
+                item.deliveredAt
+                  ? `<p class="mt-0.5 text-[11px] text-on-surface-variant">${waitLabel}</p>`
+                  : item.requestedAt && !showTimer
+                    ? `<p class="mt-0.5 text-[11px] text-on-surface-variant">Pedido às ${formatTimeShort(item.requestedAt)}</p>`
+                    : ""
+              }
+            </div>
+            <div class="flex shrink-0 flex-col items-end gap-1">
+              ${
+                showDeliverBtn
+                  ? `<button type="button" class="mark-delivered-button text-[11px] font-semibold text-primary underline decoration-primary/40 underline-offset-2" data-line-id="${item.lineId}">Entregue</button>`
+                  : ""
+              }
+              <div class="flex items-center gap-2">
+                <button class="qty-minus h-10 w-10 rounded-lg border border-slate-300 text-lg font-bold" data-index="${index}">-</button>
+                <span class="w-6 text-center text-sm font-bold">${item.qty}</span>
+                <button class="qty-plus h-10 w-10 rounded-lg border border-slate-300 text-lg font-bold" data-index="${index}">+</button>
+              </div>
+            </div>
+          </div>
+        </li>`;
+      })
+      .join("")
+    : "<li class='rounded-xl border border-slate-200 p-3 text-sm text-slate-500'>Nenhum item lancado.</li>";
+  refs.orderItemsList.innerHTML = itemsHtml;
+  refs.orderSubtotalLabel.textContent = `Subtotal: ${formatCurrency(calculateOrderSubtotal(order))}`;
+
+  document.querySelectorAll(".add-product-button").forEach((button) => {
+    if (button.dataset.bound === "1") return;
+    button.dataset.bound = "1";
+    let actedAt = 0;
+    const fire = (source) => {
+      const now = Date.now();
+      if (now - actedAt < 350) {
+        debugLog(`add ignorado (${source} duplicado)`);
+        return;
+      }
+      actedAt = now;
+      debugLog(`add disparado por ${source} pid=${button.dataset.productId}`);
+      void addItemToOrder(button.dataset.productId);
+    };
+    button.addEventListener("pointerup", (e) => {
+      if (e.pointerType === "mouse" && e.button !== 0) return;
+      fire(`pointerup/${e.pointerType || "?"}`);
+    });
+    button.addEventListener("click", () => fire("click"));
+  });
+
+  document.querySelectorAll(".qty-plus").forEach((button) => {
+    button.addEventListener("click", () => changeItemQty(Number(button.dataset.index), 1));
+  });
+  document.querySelectorAll(".qty-minus").forEach((button) => {
+    button.addEventListener("click", () => changeItemQty(Number(button.dataset.index), -1));
+  });
+
+  document.querySelectorAll(".mark-delivered-button").forEach((button) => {
+    button.addEventListener("click", () => markLineDelivered(button.dataset.lineId));
+  });
+
+  syncOrderLineTimerElements();
+  syncOrderItemsTimerInterval();
+}
+
+function renderCheckoutSummary() {
+  const order = getCurrentOrder();
+  if (!order) return;
+  const subtotal = calculateOrderSubtotal(order);
+  const feePercent = state.config.useServiceFee ? (Number(refs.serviceFeeInput.value) || 0) : 0;
+  const feeValue = subtotal * (feePercent / 100);
+  const total = subtotal + feeValue;
+
+  refs.checkoutSummary.innerHTML = `
+    <p class="flex justify-between text-sm"><span>Subtotal</span><span class="font-semibold">${formatCurrency(subtotal)}</span></p>
+    <p class="flex justify-between text-sm"><span>Taxa (${feePercent.toFixed(1)}%)</span><span class="font-semibold">${formatCurrency(feeValue)}</span></p>
+    <p class="flex justify-between border-t border-slate-200 pt-2 text-base font-bold"><span>Total</span><span>${formatCurrency(total)}</span></p>
+  `;
+}
+
+function renderCheckoutPaymentMethods() {
+  const activeMethods = (state.config.paymentMethods || []).filter((method) => method.active);
+  refs.checkoutPaymentMethodsList.innerHTML = activeMethods.length
+    ? activeMethods
+      .map((method) => `
+        <label class="flex h-touch-target-min items-center gap-2 rounded-xl border border-outline-variant px-3 text-sm">
+          <input class="payment-method" type="checkbox" value="${method.name}" data-method-id="${method.id}">
+          ${method.name}
+        </label>
+      `)
+      .join("")
+    : "<p class='col-span-2 rounded-lg border border-outline-variant bg-surface-container-high p-3 text-sm text-on-surface-variant'>Nenhuma forma de pagamento ativa. Ative em Config.</p>";
+}
+
+function renderReports() {
+  if (!refs.reportsPicker || !refs.reportsDetail || !refs.reportsDetailBody) return;
+
+  const today = todayLocalYmd();
+  if (!state.reportDateFrom) state.reportDateFrom = today;
+  if (!state.reportDateTo) state.reportDateTo = today;
+  if (refs.reportsDateFromInput && !refs.reportsDateFromInput.dataset.bound) {
+    refs.reportsDateFromInput.dataset.bound = "1";
+    refs.reportsDateFromInput.addEventListener("change", () => {
+      state.reportDateFrom = refs.reportsDateFromInput.value || today;
+      renderReports();
+    });
+  }
+  if (refs.reportsDateToInput && !refs.reportsDateToInput.dataset.bound) {
+    refs.reportsDateToInput.dataset.bound = "1";
+    refs.reportsDateToInput.addEventListener("change", () => {
+      state.reportDateTo = refs.reportsDateToInput.value || today;
+      renderReports();
+    });
+  }
+  if (refs.reportsBackButton && !refs.reportsBackButton.dataset.bound) {
+    refs.reportsBackButton.dataset.bound = "1";
+    refs.reportsBackButton.addEventListener("click", () => {
+      state.selectedReport = null;
+      renderReports();
+    });
+  }
+
+  if (refs.reportsDateFromInput) refs.reportsDateFromInput.value = state.reportDateFrom;
+  if (refs.reportsDateToInput) refs.reportsDateToInput.value = state.reportDateTo;
+
+  const fromYmd = state.reportDateFrom || today;
+  const toYmd = state.reportDateTo || today;
+  const orders = loadOrders();
+  const slice = finalizedOrdersInLocalDateRange(orders, fromYmd, toYmd);
+  const totalRev = slice.reduce((s, o) => s + (o.totalPaid || 0), 0);
+  const orderCount = slice.length;
+
+  if (!state.selectedReport) {
+    refs.reportsPicker.classList.remove("hidden");
+    refs.reportsDetail.classList.add("hidden");
+    return;
+  }
+
+  refs.reportsPicker.classList.add("hidden");
+  refs.reportsDetail.classList.remove("hidden");
+
+  const titleMap = {
+    daily: "Vendas no periodo",
+    revenue: "Faturamento",
+    payments: "Formas de pagamento",
+    products: "Itens mais vendidos",
+    peakHour: "Horario de pico",
+    weekday: "Dias da semana",
+    cashClose: "Fechamento de caixa"
+  };
+  const title = titleMap[state.selectedReport] || "Relatorio";
+
+  let body = "";
+  if (state.selectedReport === "daily") {
+    body = `
+      <p class="text-xs uppercase text-on-surface-variant">${fromYmd === toYmd ? `Data ${fromYmd}` : `${fromYmd} a ${toYmd}`}</p>
+      <p class="mt-3 text-sm text-on-surface-variant">Comandas finalizadas</p>
+      <p class="text-2xl font-extrabold text-primary">${orderCount}</p>
+      <p class="mt-3 text-sm text-on-surface-variant">Total pago (soma)</p>
+      <p class="text-2xl font-extrabold text-secondary">${formatCurrency(totalRev)}</p>
+    `;
+  } else if (state.selectedReport === "revenue") {
+    body = `
+      <p class="text-xs uppercase text-on-surface-variant">${fromYmd === toYmd ? `Data ${fromYmd}` : `${fromYmd} a ${toYmd}`}</p>
+      <p class="mt-3 text-sm text-on-surface-variant">Faturamento (total pago)</p>
+      <p class="text-2xl font-extrabold text-primary">${formatCurrency(totalRev)}</p>
+      <p class="mt-2 text-xs text-on-surface-variant">${orderCount} comanda(s) no periodo.</p>
+    `;
+  } else if (state.selectedReport === "payments") {
+    const shares = aggregatePaymentMethodShares(slice);
+    const rows = paymentSharesSorted(shares);
+    body = `
+      <p class="text-xs uppercase text-on-surface-variant">${fromYmd === toYmd ? `Data ${fromYmd}` : `${fromYmd} a ${toYmd}`}</p>
+      <p class="mt-2 text-[11px] text-on-surface-variant">Valores estimados: quando ha mais de uma forma no mesmo fechamento, o total e dividido igualmente entre elas.</p>
+      <ul class="mt-3 space-y-2">
+        ${rows.length
+          ? rows
+            .map(
+              (row) => `
+          <li class="flex justify-between rounded-lg border border-outline-variant px-3 py-2 text-sm">
+            <span>${row.name}</span>
+            <span class="font-bold text-primary">${formatCurrency(row.value)}</span>
+          </li>`
+            )
+            .join("")
+          : "<li class='text-sm text-on-surface-variant'>Nenhum pagamento no periodo.</li>"}
+      </ul>
+    `;
+  } else if (state.selectedReport === "products") {
+    const top = aggregateTopProducts(slice, 20);
+    body = `
+      <p class="text-xs uppercase text-on-surface-variant">${fromYmd === toYmd ? `Data ${fromYmd}` : `${fromYmd} a ${toYmd}`}</p>
+      <ul class="mt-3 space-y-2">
+        ${top.length
+          ? top
+            .map(
+              (row) => `
+          <li class="flex justify-between gap-2 rounded-lg border border-outline-variant px-3 py-2 text-sm">
+            <span class="min-w-0 flex-1">${row.name}</span>
+            <span class="shrink-0 font-semibold text-on-surface">${row.qty} un.</span>
+            <span class="shrink-0 font-bold text-primary">${formatCurrency(row.revenue)}</span>
+          </li>`
+            )
+            .join("")
+          : "<li class='text-sm text-on-surface-variant'>Nenhum item no periodo.</li>"}
+      </ul>
+    `;
+  } else if (state.selectedReport === "peakHour") {
+    const { counts, revenue, peakHourIndex } = aggregatePeakHour(slice);
+    const maxCount = Math.max(1, ...counts);
+    body = `
+      <p class="text-xs uppercase text-on-surface-variant">${fromYmd === toYmd ? `Data ${fromYmd}` : `${fromYmd} a ${toYmd}`}</p>
+      <p class="mt-2 text-sm text-on-surface-variant">Por hora local do fechamento da comanda.</p>
+      ${
+        peakHourIndex != null
+          ? `<p class="mt-2 text-sm font-semibold text-primary">Pico: ${String(peakHourIndex).padStart(2, "0")}h (${counts[peakHourIndex]} comandas)</p>`
+          : "<p class='mt-2 text-sm text-on-surface-variant'>Sem dados.</p>"
+      }
+      <div class="mt-3 space-y-1">
+        ${counts
+          .map((c, h) => {
+            const w = Math.round((c / maxCount) * 100);
+            return `<div class="flex items-center gap-2 text-xs">
+              <span class="w-8 tabular-nums text-on-surface-variant">${String(h).padStart(2, "0")}h</span>
+              <div class="h-2 flex-1 overflow-hidden rounded-full bg-surface-container-high">
+                <div class="h-full rounded-full bg-primary" style="width:${w}%"></div>
+              </div>
+              <span class="w-16 text-right text-on-surface-variant">${c}</span>
+            </div>`;
+          })
+          .join("")}
+      </div>
+    `;
+  } else if (state.selectedReport === "weekday") {
+    const { counts, revenue, peakWeekdayIndex } = aggregateWeekday(slice);
+    const maxCount = Math.max(1, ...counts);
+    body = `
+      <p class="text-xs uppercase text-on-surface-variant">${fromYmd === toYmd ? `Data ${fromYmd}` : `${fromYmd} a ${toYmd}`}</p>
+      <p class="mt-2 text-sm text-on-surface-variant">Por dia da semana (fechamento).</p>
+      ${
+        peakWeekdayIndex != null
+          ? `<p class="mt-2 text-sm font-semibold text-primary">Mais comandas: ${WEEKDAY_LABELS_PT[peakWeekdayIndex]} (${counts[peakWeekdayIndex]})</p>`
+          : ""
+      }
+      <div class="mt-3 space-y-1">
+        ${counts
+          .map((c, wd) => {
+            const w = Math.round((c / maxCount) * 100);
+            return `<div class="flex items-center gap-2 text-xs">
+              <span class="w-10 text-on-surface-variant">${WEEKDAY_LABELS_PT[wd]}</span>
+              <div class="h-2 flex-1 overflow-hidden rounded-full bg-surface-container-high">
+                <div class="h-full rounded-full bg-secondary" style="width:${w}%"></div>
+              </div>
+              <span class="w-16 text-right font-semibold text-primary">${formatCurrency(revenue[wd])}</span>
+            </div>`;
+          })
+          .join("")}
+      </div>
+    `;
+  } else if (state.selectedReport === "cashClose") {
+    const uiMsg = state.cashCloseUiMessage;
+    state.cashCloseUiMessage = null;
+    const refYmd = state.cashCloseDateYmd || today;
+    const draft = computeCashCloseDraft(refYmd);
+    const ativasLabel =
+      draft.activeOrdersCount != null ? String(draft.activeOrdersCount) : "— (so no dia de hoje)";
+    const history = [...loadDailyCloses()].sort((a, b) => String(b.dateYmd).localeCompare(String(a.dateYmd)));
+    body = `
+      <p class="text-xs text-on-surface-variant">Registra o mesmo resumo do Inicio para a data escolhida: comandas <strong>abertas</strong> (somente se a data for hoje) e <strong>total bruto</strong> (soma das finalizadas na data).</p>
+      <label class="mt-3 block">
+        <span class="mb-1 block text-xs font-bold uppercase text-on-surface-variant">Data de referencia</span>
+        <input id="cashCloseDateInput" type="date" class="h-touch-target-min w-full rounded-lg border border-outline-variant bg-surface-container-low px-3 text-sm" value="${refYmd}">
+      </label>
+      <div class="mt-stack-md grid grid-cols-2 gap-2">
+        <div class="rounded-lg border border-outline-variant bg-surface-container-low px-3 py-2">
+          <p class="text-[10px] font-semibold uppercase text-on-surface-variant">Ativas (agora)</p>
+          <p class="text-xl font-extrabold text-primary">${ativasLabel}</p>
+        </div>
+        <div class="rounded-lg border border-outline-variant bg-surface-container-low px-3 py-2">
+          <p class="text-[10px] font-semibold uppercase text-on-surface-variant">Total bruto</p>
+          <p class="text-xl font-extrabold text-secondary">${formatCurrency(draft.totalBruto)}</p>
+        </div>
+      </div>
+      <p class="mt-2 text-xs text-on-surface-variant">${draft.finalizedOrdersCount} comanda(s) finalizada(s) nesta data.</p>
+      <button type="button" id="saveCashCloseButton" class="mt-stack-md h-touch-target-min w-full rounded-xl bg-primary text-sm font-bold text-on-primary">Salvar fechamento</button>
+      <p id="cashCloseFeedback" class="mt-2 min-h-[1rem] text-xs ${uiMsg?.type === "err" ? "text-error" : uiMsg?.type === "ok" ? "text-secondary" : "text-on-surface-variant"}">${uiMsg?.text || ""}</p>
+      <div class="mt-stack-md border-t border-outline-variant pt-3">
+        <p class="text-xs font-bold uppercase text-on-surface-variant">Historico salvo</p>
+        <ul class="mt-2 max-h-48 space-y-2 overflow-y-auto">
+          ${history.length
+            ? history
+              .map(
+                (row) => `
+            <li class="rounded-lg border border-outline-variant px-3 py-2 text-xs">
+              <p class="font-semibold text-on-surface">${row.dateYmd}</p>
+              <p class="text-on-surface-variant">Ativas: ${row.activeOrdersCount != null ? row.activeOrdersCount : "—"} • Bruto: ${formatCurrency(row.totalBruto || 0)} • ${row.finalizedOrdersCount ?? 0} fin.</p>
+              <p class="text-[10px] text-on-surface-variant">${row.closedAt ? new Date(row.closedAt).toLocaleString("pt-BR") : ""}</p>
+            </li>`
+              )
+              .join("")
+            : "<li class='text-sm text-on-surface-variant'>Nenhum fechamento salvo ainda.</li>"}
+        </ul>
+      </div>
+    `;
+  } else {
+    body = "<p class='text-sm text-on-surface-variant'>Selecione um tipo na lista.</p>";
+  }
+
+  refs.reportsDetailBody.innerHTML = `
+    <h3 class="text-lg font-extrabold text-primary">${title}</h3>
+    <div class="mt-stack-md">${body}</div>
+  `;
+}
+
+function renderAll() {
+  applyTheme();
+  renderBottomTabs();
+  renderSettings();
+  renderView();
+  renderDashboard();
+  renderProductAdmin();
+  if (state.selectedTab === "reportsTab") {
+    renderReports();
+  }
+  if (state.currentView === "detail" || state.currentView === "checkout") {
+    renderCategoryOptions();
+    renderOrderDetails();
+  }
+  if (state.currentView === "checkout") {
+    renderCheckoutPaymentMethods();
+    renderCheckoutSummary();
+  }
+}
+
+function openDetailDialog(orderId, options = {}) {
+  state.pendingNewOrder = null;
+  state.selectedOrderId = orderId;
+  state.productSearch = "";
+  state.selectedCategory = "Todas";
+  state.cancelConfirmOpen = false;
+  state.currentView = "detail";
+  refs.productSearchInput.value = "";
+
+  const row = loadOrders().find((entry) => String(entry.id) === String(orderId));
+  const status = row ? normalizeOrderStatus(row.status) : "Aberta";
+  const isLocked = status === "Finalizado" || status === "Cancelada";
+  if (options.detailAction !== undefined) {
+    state.detailAction = options.detailAction;
+  } else {
+    state.detailAction = !isLocked && status === "Aberta" ? "add" : null;
+  }
+
+  renderCategoryOptions();
+  renderOrderDetails();
+  renderView();
+}
+
+async function beginFinalizeFlowForOrderId(orderId) {
+  state.pendingNewOrder = null;
+  state.selectedOrderId = orderId;
+  const order = loadOrders().find((entry) => String(entry.id) === String(orderId));
+  if (!order || !order.items?.length) return;
+
+  const customerName = (order.customer || "").trim();
+  if (!customerName) {
+    openDetailDialog(orderId, { detailAction: null });
+    refs.detailCustomerFeedback.textContent = "Informe o nome do cliente antes de finalizar.";
+    return;
+  }
+
+  refs.detailCustomerFeedback.textContent = "";
+  refs.checkoutFeedback.textContent = "";
+  refs.serviceFeeInput.value = String(state.config.useServiceFee ? (order.serviceFeePercent || 10) : 0);
+  renderCheckoutPaymentMethods();
+  document.querySelectorAll(".payment-method").forEach((checkbox) => {
+    checkbox.checked = order.paymentMethods?.includes(checkbox.value) || false;
+  });
+  state.currentView = "checkout";
+  state.detailAction = null;
+  renderCheckoutSummary();
+  renderView();
+}
+
+async function addItemToOrder(productId) {
+  const products = loadProducts();
+  const product = products.find((entry) => String(entry.id) === String(productId));
+  if (!product) return;
+
+  const requiresPrep = product.requiresPrep ?? categoryRequiresPrep(product.category);
+
+  if (isPendingLocalOrder()) {
+    await _pendingOrderPostChain;
+    let release;
+    _pendingOrderPostChain = new Promise((r) => {
+      release = r;
+    });
+    try {
+      if (!isPendingLocalOrder()) {
+        await addItemToOrder(productId);
+        return;
+      }
+      const order = state.pendingNewOrder;
+      const existing = order.items.find((item) => String(item.productId) === String(product.id));
+      if (existing) {
+        existing.qty += 1;
+        if (existing.requiresPrep && existing.prepStatus === "Pronto") {
+          existing.prepStatus = "Aguardando";
+          existing.requestedAt = new Date().toISOString();
+        }
+      } else {
+        order.items.push({
+          lineId: crypto.randomUUID(),
+          productId: product.id,
+          name: product.name,
+          price: product.price,
+          qty: 1,
+          requiresPrep,
+          requestedAt: new Date().toISOString(),
+          deliveredAt: null,
+          serviceSeconds: null,
+          prepStatus: requiresPrep ? "Aguardando" : null
+        });
+      }
+      order.everHadItems = true;
+      order.status = deriveOrderStatus(order);
+      try {
+        await persistPendingOrderToServer();
+      } catch (_) {
+        renderOrderDetails();
+        return;
+      }
+      renderDashboard();
+      renderOrderDetails();
+    } finally {
+      release();
+    }
+    return;
+  }
+
+  const orders = loadOrders();
+  const order = orders.find((entry) => String(entry.id) === String(state.selectedOrderId));
+  if (!order) return;
+
+  const existing = order.items.find((item) => String(item.productId) === String(product.id));
+  if (existing) {
+    existing.qty += 1;
+    if (existing.requiresPrep && existing.prepStatus === "Pronto") {
+      existing.prepStatus = "Aguardando";
+      existing.requestedAt = new Date().toISOString();
+    }
+  } else {
+    order.items.push({
+      lineId: crypto.randomUUID(),
+      productId: product.id,
+      name: product.name,
+      price: product.price,
+      qty: 1,
+      requiresPrep,
+      requestedAt: new Date().toISOString(),
+      deliveredAt: null,
+      serviceSeconds: null,
+      prepStatus: requiresPrep ? "Aguardando" : null
+    });
+  }
+  order.everHadItems = true;
+  order.status = deriveOrderStatus(order);
+  saveOrders(orders);
+  renderDashboard();
+  renderOrderDetails();
+}
+
+function changeItemQty(itemIndex, delta) {
+  const order = getCurrentOrder();
+  if (!order) return;
+
+  const item = order.items[itemIndex];
+  if (!item) return;
+  item.qty += delta;
+  if (item.qty <= 0) {
+    order.items.splice(itemIndex, 1);
+  }
+  order.status = deriveOrderStatus(order);
+
+  if (isPendingLocalOrder()) {
+    renderDashboard();
+    renderOrderDetails();
+    return;
+  }
+
+  const orders = loadOrders();
+  saveOrders(orders);
+  renderDashboard();
+  renderOrderDetails();
+}
+
+function fillProductForm(productId) {
+  const product = loadProducts().find((entry) => String(entry.id) === String(productId));
+  if (!product) return;
+  state.selectedTab = "settingsTab";
+  state.selectedSettingsTab = "products";
+  renderAll();
+  refs.productIdInput.value = product.id;
+  refs.productNameInput.value = product.name;
+  const hasCategoryOption = [...refs.productCategoryInput.options].some((option) => option.value === product.category);
+  if (!hasCategoryOption) {
+    const option = document.createElement("option");
+    option.value = product.category;
+    option.textContent = `${product.category} (legada)`;
+    refs.productCategoryInput.appendChild(option);
+  }
+  refs.productCategoryInput.value = product.category;
+  refs.productPriceInput.value = product.price;
+  refs.productRequiresPrepInput.checked = product.requiresPrep ?? categoryRequiresPrep(product.category);
+  refs.productSubmitButton.textContent = "Atualizar";
+  refs.productNameInput.scrollIntoView({ behavior: "smooth", block: "center" });
+  refs.productNameInput.focus();
+}
+
+function clearProductForm() {
+  refs.productForm.reset();
+  refs.productIdInput.value = "";
+  refs.productSubmitButton.textContent = "Salvar";
+}
+
+function deleteCategory(categoryName) {
+  const hasProductsUsingCategory = loadProducts().some((product) => product.category === categoryName);
+  if (hasProductsUsingCategory) {
+    refs.categoryFeedback.textContent = "Nao e possivel excluir: existem produtos nessa categoria.";
+    return;
+  }
+  state.config.categories = state.config.categories.filter((category) => category !== categoryName);
+  state.config.prepCategories = (state.config.prepCategories || []).filter((category) => category !== categoryName);
+  saveConfig(state.config);
+  refs.categoryFeedback.textContent = "";
+  renderAll();
+}
+
+function deletePaymentMethod(methodId) {
+  const methods = state.config.paymentMethods || [];
+  if (methods.length <= 1) {
+    refs.paymentMethodFeedback.textContent = "Mantenha ao menos uma forma de pagamento.";
+    return;
+  }
+  state.config.paymentMethods = methods.filter((method) => method.id !== methodId);
+  saveConfig(state.config);
+  refs.paymentMethodFeedback.textContent = "";
+  renderAll();
+}
+
+function deleteProduct(productId) {
+  const products = loadProducts().filter((product) => String(product.id) !== String(productId));
+  void apiDelete(`/products/${productId}`);
+  saveProducts(products);
+  renderAll();
+}
+
+function bindAddProductListInteractionsOnce() {
+  const list = refs.availableProductsList;
+  if (!list || list.dataset.boundAddProduct === "1") return;
+  list.dataset.boundAddProduct = "1";
+
+  list.addEventListener("pointerdown", (e) => {
+    const btn = e.target.closest(".add-product-button");
+    if (!btn || !list.contains(btn)) return;
+    if (addProductPressTarget && addProductPressTarget !== btn) {
+      addProductPressTarget.classList.remove("is-pressed");
+    }
+    addProductPressTarget = btn;
+    btn.classList.add("is-pressed");
+  });
+
+  const releaseAddProductPress = () => {
+    if (addProductPressTarget) {
+      addProductPressTarget.classList.remove("is-pressed");
+      addProductPressTarget = null;
+    }
+  };
+
+  document.addEventListener("pointerup", releaseAddProductPress);
+  document.addEventListener("pointercancel", releaseAddProductPress);
+}
+
+function bindEvents() {
+  refs.loginForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    refs.loginFeedback.textContent = "";
+    const username = refs.usernameInput.value.trim();
+    const password = refs.passwordInput.value.trim();
+    const validUser = username
+      ? state.cache.users.find((user) => {
+        if (user.username !== username) return false;
+        if (!password) return true;
+        return user.password === password;
+      })
+      : state.cache.users[0];
+    if (!validUser) {
+      refs.loginFeedback.textContent = "Credenciais invalidas.";
+      return;
+    }
+    setLoggedUser(validUser);
+    refs.loginForm.reset();
+    renderAuth();
+  });
+
+  refs.biometricButton.addEventListener("click", () => {
+    refs.loginFeedback.textContent = "";
+    const quickUser = state.cache.users[0];
+    if (!quickUser) {
+      refs.loginFeedback.textContent = "API indisponivel. Inicie o json-server.";
+      return;
+    }
+    setLoggedUser(quickUser);
+    renderAuth();
+  });
+
+  refs.logoutButton.addEventListener("click", () => {
+    clearLoggedUser();
+    state.currentView = "main";
+    refs.orderDialog.close();
+    renderAuth();
+  });
+
+  refs.openSettingsButton.addEventListener("click", () => {
+    state.currentView = "main";
+    state.selectedTab = "settingsTab";
+    state.selectedSettingsTab = "products";
+    renderAll();
+  });
+
+  refs.statusFilters.forEach((button) => {
+    button.addEventListener("click", () => {
+      state.selectedFilter = button.dataset.filter;
+      refs.statusFilters.forEach((filterButton) => {
+        const selected = filterButton.dataset.filter === state.selectedFilter;
+        filterButton.className = selected
+          ? "status-filter h-touch-target-min flex-1 rounded-full bg-primary-container px-3 text-xs font-bold text-on-primary-container"
+          : "status-filter h-touch-target-min flex-1 rounded-full bg-surface-container-high px-3 text-xs font-bold text-on-surface-variant";
+      });
+      renderDashboard();
+    });
+  });
+
+  refs.newOrderButton.addEventListener("click", createNewOrderAndOpen);
+  refs.closeOrderDialogButton.addEventListener("click", () => refs.orderDialog.close());
+
+  refs.bottomTabs.forEach((button) => {
+    button.addEventListener("click", () => {
+      state.selectedTab = button.dataset.tab || "dashboardTab";
+      if (state.selectedTab === "dashboardTab") {
+        state.currentView = "main";
+        state.detailAction = null;
+        state.cancelConfirmOpen = false;
+        state.pendingNewOrder = null;
+        if (state.selectedOrderId === PENDING_ORDER_ID) state.selectedOrderId = null;
+      }
+      if (state.selectedTab === "settingsTab") {
+        state.selectedSettingsTab = "products";
+      }
+      if (state.selectedTab === "reportsTab") {
+        state.currentView = "main";
+      }
+      renderAll();
+    });
+  });
+
+  document.querySelectorAll(".report-type-button").forEach((btn) => {
+    if (btn.dataset.boundReport) return;
+    btn.dataset.boundReport = "1";
+    btn.addEventListener("click", () => {
+      state.selectedReport = btn.dataset.report || null;
+      renderReports();
+    });
+  });
+
+  if (refs.reportsDetail && !refs.reportsDetail.dataset.cashCloseDelegate) {
+    refs.reportsDetail.dataset.cashCloseDelegate = "1";
+    refs.reportsDetail.addEventListener("change", (e) => {
+      if (e.target.id !== "cashCloseDateInput") return;
+      state.cashCloseDateYmd = e.target.value || todayLocalYmd();
+      renderReports();
+    });
+    refs.reportsDetail.addEventListener("click", (e) => {
+      if (e.target.id !== "saveCashCloseButton") return;
+      e.preventDefault();
+      const ymd = document.getElementById("cashCloseDateInput")?.value || todayLocalYmd();
+      void (async () => {
+        try {
+          await persistDailyClose(computeCashCloseDraft(ymd));
+          state.cashCloseUiMessage = { type: "ok", text: "Fechamento salvo." };
+          renderDashboard();
+          renderReports();
+        } catch (_) {
+          state.cashCloseUiMessage = {
+            type: "err",
+            text: "Nao foi possivel salvar. Verifique se o json-server tem dailyCloses no db.json."
+          };
+          renderReports();
+        }
+      })();
+    });
+  }
+
+  refs.orderForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    createNewOrderAndOpen();
+    refs.orderForm.reset();
+    refs.orderDialog.close();
+  });
+
+  refs.settingsTabButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      state.selectedSettingsTab = button.dataset.settingsTab;
+      renderSettings();
+    });
+  });
+
+  refs.settingsTabsScroll?.addEventListener("scroll", updateSettingsTabsHints);
+  window.addEventListener("resize", updateSettingsTabsHints);
+
+  refs.closeDetailDialogButton.addEventListener("click", () => {
+    state.currentView = "main";
+    state.detailAction = null;
+    state.cancelConfirmOpen = false;
+    state.pendingNewOrder = null;
+    if (state.selectedOrderId === PENDING_ORDER_ID) state.selectedOrderId = null;
+    renderView();
+  });
+
+  refs.confirmDetailButton.addEventListener("click", () => {
+    const customerName = refs.detailCustomerInput.value.trim();
+    if (!customerName) {
+      refs.detailCustomerFeedback.textContent = "Informe o nome do cliente para confirmar.";
+      refs.detailCustomerInput.focus();
+      return;
+    }
+    refs.detailCustomerFeedback.textContent = "";
+    const order = getCurrentOrder();
+    if (isPendingLocalOrder()) {
+      state.pendingNewOrder.customer = customerName;
+      if (state.config.useTables && refs.orderTableInput) {
+        state.pendingNewOrder.table = refs.orderTableInput.value.trim();
+      }
+      state.pendingNewOrder = null;
+      state.selectedOrderId = null;
+      state.currentView = "main";
+      state.detailAction = null;
+      state.cancelConfirmOpen = false;
+      renderAll();
+      return;
+    }
+    if (order) {
+      const orders = loadOrders();
+      const target = orders.find((entry) => String(entry.id) === String(order.id));
+      if (target) {
+        target.customer = customerName;
+        if (state.config.useTables && refs.orderTableInput) {
+          target.table = refs.orderTableInput.value.trim();
+        }
+        saveOrders(orders);
+      }
+    }
+    state.currentView = "main";
+    state.detailAction = null;
+    state.cancelConfirmOpen = false;
+    renderAll();
+  });
+
+  refs.saveCustomerButton.addEventListener("click", () => {
+    const order = getCurrentOrder();
+    if (!order) return;
+    const customerName = refs.detailCustomerInput.value.trim();
+    if (!customerName) {
+      refs.detailCustomerFeedback.textContent = "Nome do cliente é obrigatório.";
+      refs.detailCustomerInput.focus();
+      return;
+    }
+    if (isPendingLocalOrder()) {
+      state.pendingNewOrder.customer = customerName;
+      if (state.config.useTables && refs.orderTableInput) {
+        state.pendingNewOrder.table = refs.orderTableInput.value.trim();
+      }
+      refs.detailCustomerFeedback.textContent = "";
+      renderOrderDetails();
+      return;
+    }
+    const orders = loadOrders();
+    const target = orders.find((entry) => String(entry.id) === String(order.id));
+    if (!target) return;
+    target.customer = customerName;
+    if (state.config.useTables && refs.orderTableInput) {
+      target.table = refs.orderTableInput.value.trim();
+    }
+    saveOrders(orders);
+    refs.detailCustomerFeedback.textContent = "";
+    renderOrderDetails();
+    renderDashboard();
+  });
+
+  refs.openCancelFlowButton.addEventListener("click", () => {
+    state.cancelConfirmOpen = true;
+    renderOrderDetails();
+  });
+
+  refs.dismissCancelOrderButton.addEventListener("click", () => {
+    state.cancelConfirmOpen = false;
+    renderOrderDetails();
+  });
+
+  refs.confirmCancelOrderButton.addEventListener("click", async () => {
+    if (isPendingLocalOrder()) {
+      state.pendingNewOrder = null;
+      state.selectedOrderId = null;
+      state.cancelConfirmOpen = false;
+      state.currentView = "main";
+      state.detailAction = null;
+      renderAll();
+      return;
+    }
+
+    const orders = loadOrders();
+    const targetIndex = orders.findIndex((entry) => String(entry.id) === String(state.selectedOrderId));
+    if (targetIndex < 0) return;
+    const target = orders[targetIndex];
+    if (target.id === undefined || target.id === null || target.id === "") return;
+
+    const temItensNaComanda = Array.isArray(target.items) && target.items.length > 0;
+
+    if (!temItensNaComanda) {
+      try {
+        await apiDelete(`/commandas/${target.id}`);
+      } catch (_) {
+        /* servidor indisponivel */
+      }
+      orders.splice(targetIndex, 1);
+      state.cache.commandas = orders;
+    } else {
+      target.status = "Cancelada";
+      target.canceledAt = new Date().toISOString();
+      saveOrders(orders);
+      try {
+        await apiPatch(`/commandas/${target.id}`, target);
+      } catch (_) {
+        /* cache ja atualizado; PATCH pode falhar se servidor caiu */
+      }
+    }
+
+    state.cancelConfirmOpen = false;
+    state.currentView = "main";
+    state.selectedOrderId = null;
+    renderAll();
+  });
+
+  refs.productSearchInput.addEventListener("input", () => {
+    state.productSearch = refs.productSearchInput.value;
+    renderOrderDetails();
+  });
+
+  refs.closeCheckoutDialogButton.addEventListener("click", () => {
+    state.currentView = "detail";
+    renderView();
+  });
+  refs.serviceFeeInput.addEventListener("input", renderCheckoutSummary);
+
+  refs.confirmCheckoutButton.addEventListener("click", () => {
+    const order = getCurrentOrder();
+    if (!order) return;
+    const paymentMethods = [...document.querySelectorAll(".payment-method:checked")].map((checkbox) => checkbox.value);
+    if (!paymentMethods.length) {
+      refs.checkoutFeedback.textContent = "Selecione ao menos uma forma de pagamento.";
+      return;
+    }
+    const subtotal = calculateOrderSubtotal(order);
+    const serviceFeePercent = state.config.useServiceFee ? (Number(refs.serviceFeeInput.value) || 0) : 0;
+    const serviceFee = subtotal * (serviceFeePercent / 100);
+    const totalPaid = subtotal + serviceFee;
+
+    const orders = loadOrders();
+    const target = orders.find((entry) => String(entry.id) === String(order.id));
+    if (!target) return;
+    target.status = "Finalizado";
+    target.paymentMethods = paymentMethods;
+    target.serviceFeePercent = serviceFeePercent;
+    target.totalPaid = totalPaid;
+    target.closedAt = new Date().toISOString();
+    saveOrders(orders);
+
+    state.currentView = "main";
+    state.selectedOrderId = null;
+    renderAll();
+  });
+
+  refs.productForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const products = loadProducts();
+    const productData = {
+      name: refs.productNameInput.value.trim(),
+      category: refs.productCategoryInput.value.trim(),
+      price: Number(refs.productPriceInput.value),
+      requiresPrep: refs.productRequiresPrepInput.checked
+    };
+    if (!productData.name || !productData.category || Number.isNaN(productData.price)) return;
+
+    if (refs.productIdInput.value) {
+      const target = products.find((product) => String(product.id) === String(refs.productIdInput.value));
+      if (target) {
+        target.name = productData.name;
+        target.category = productData.category;
+        target.price = productData.price;
+        target.requiresPrep = productData.requiresPrep;
+      }
+    } else {
+      const newProduct = { ...productData };
+      products.unshift(newProduct);
+      void apiPost("/products", newProduct).then((created) => {
+        const idx = products.findIndex((p) => p === newProduct);
+        if (idx >= 0) products[idx] = created;
+        saveProducts(products);
+        renderAll();
+      });
+      renderAll();
+      return;
+    }
+
+    saveProducts(products);
+    clearProductForm();
+    renderAll();
+  });
+
+  refs.clearProductFormButton.addEventListener("click", clearProductForm);
+
+  refs.tableModeToggle.addEventListener("change", () => {
+    state.config.useTables = refs.tableModeToggle.checked;
+    saveConfig(state.config);
+    renderAll();
+  });
+
+  refs.serviceFeeToggle.addEventListener("change", () => {
+    state.config.useServiceFee = refs.serviceFeeToggle.checked;
+    saveConfig(state.config);
+    renderAll();
+  });
+
+  refs.categoryForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    refs.categoryFeedback.textContent = "";
+    const name = refs.categoryNameInput.value.trim();
+    if (!name) return;
+
+    const exists = state.config.categories.some((category) => category.toLowerCase() === name.toLowerCase());
+    if (exists) {
+      refs.categoryFeedback.textContent = "Categoria ja cadastrada.";
+      return;
+    }
+
+    state.config.categories.push(name);
+    saveConfig(state.config);
+    refs.categoryForm.reset();
+    renderAll();
+  });
+
+  refs.paymentMethodForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    refs.paymentMethodFeedback.textContent = "";
+    const name = refs.paymentMethodNameInput.value.trim();
+    if (!name) return;
+
+    const exists = (state.config.paymentMethods || []).some((method) => method.name.toLowerCase() === name.toLowerCase());
+    if (exists) {
+      refs.paymentMethodFeedback.textContent = "Forma de pagamento ja cadastrada.";
+      return;
+    }
+
+    state.config.paymentMethods.push({
+      id: crypto.randomUUID(),
+      name,
+      active: true
+    });
+    saveConfig(state.config);
+    refs.paymentMethodForm.reset();
+    renderAll();
+  });
+
+  refs.confirmSettingsButton.addEventListener("click", () => {
+    state.selectedTab = "dashboardTab";
+    renderAll();
+  });
+
+  refs.reopenSearchButton?.addEventListener("click", () => renderReopenPanel());
+  refs.reopenFilterDateInput?.addEventListener("change", () => renderReopenPanel());
+
+  refs.reopenConfirmDismissButton?.addEventListener("click", () => {
+    refs.reopenConfirmDialog?.close();
+  });
+  refs.reopenConfirmAcceptButton?.addEventListener("click", () => {
+    const id = refs.reopenConfirmAcceptButton?.dataset.orderId;
+    if (!id) return;
+    if (performReopenOrder(id)) {
+      refs.reopenConfirmDialog?.close();
+      renderReopenPanel();
+      renderAll();
+    }
+  });
+
+  bindAddProductListInteractionsOnce();
+}
+
+async function init() {
+  try {
+    await bootstrapFromApi();
+    state.config = loadConfig();
+    const t = todayLocalYmd();
+    state.reportDateFrom = t;
+    state.reportDateTo = t;
+    state.cashCloseDateYmd = t;
+    applyTheme();
+    bindEvents();
+    renderAuth();
+  } catch (error) {
+    refs.loginFeedback.textContent = "Nao foi possivel conectar na API local (json-server).";
+  }
+}
+
+init();

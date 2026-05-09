@@ -1,0 +1,86 @@
+{
+  "users": [
+    {
+      "id": "1",
+      "username": "garcom",
+      "password": "1234",
+      "role": "Atendente"
+    },
+    {
+      "id": "2",
+      "username": "admin",
+      "password": "admin123",
+      "role": "Gerente"
+    }
+  ],
+  "products": [
+    {
+      "id": "1",
+      "name": "Cerveja Long Neck",
+      "category": "Bebidas",
+      "price": 12.5
+    },
+    {
+      "id": "2",
+      "name": "Refrigerante Lata",
+      "category": "Bebidas",
+      "price": 7
+    },
+    {
+      "id": "3",
+      "name": "Agua sem Gas",
+      "category": "Bebidas",
+      "price": 4.5
+    },
+    {
+      "name": "Frango",
+      "category": "Lanches",
+      "price": 12,
+      "id": "67Q_FkxyRcU",
+      "requiresPrep": true
+    }
+  ],
+  "commandas": [],
+  "dailyCloses": [
+    {
+      "dateYmd": "2026-05-09",
+      "closedAt": "2026-05-09T05:59:33.082Z",
+      "activeOrdersCount": 2,
+      "totalBruto": 37,
+      "finalizedOrdersCount": 2,
+      "id": "iGMBUKQRRQU"
+    }
+  ],
+  "config": [
+    {
+      "id": "1",
+      "useTables": false,
+      "useServiceFee": false,
+      "activeTheme": "light-pro",
+      "paymentMethods": [
+        {
+          "id": "card",
+          "name": "Cartao",
+          "active": true
+        },
+        {
+          "id": "cash",
+          "name": "Dinheiro",
+          "active": true
+        },
+        {
+          "id": "pix",
+          "name": "PIX",
+          "active": true
+        }
+      ],
+      "categories": [
+        "Bebidas",
+        "Lanches",
+        "Porcoes"
+      ],
+      "prepCategories": []
+    }
+  ],
+  "$schema": "./node_modules/json-server/schema.json"
+}
