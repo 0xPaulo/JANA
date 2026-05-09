@@ -483,6 +483,33 @@ const refs = {
   reportsBackButton: document.querySelector("#reportsBackButton")
 };
 
+/** Evita flash da tela de login ao recarregar com sessão Supabase salva no navegador. */
+function hideAuthBootScreen() {
+  const el = document.getElementById("__authBoot");
+  if (el) el.remove();
+}
+
+function showAuthBootScreen() {
+  if (!isSupabaseConfigured()) return;
+  if (document.getElementById("__authBoot")) return;
+  if (refs.loginScreen) refs.loginScreen.classList.add("hidden");
+  if (refs.appScreen) refs.appScreen.classList.add("hidden");
+  const el = document.createElement("div");
+  el.id = "__authBoot";
+  el.setAttribute("role", "status");
+  el.setAttribute("aria-live", "polite");
+  el.className =
+    "login-viewport-min flex flex-col items-center justify-center gap-2 px-margin-mobile py-stack-md text-on-surface-variant";
+  el.innerHTML =
+    '<span class="material-symbols-rounded animate-pulse text-2xl text-primary">progress_activity</span><p class="text-sm">Carregando...</p>';
+  const main = refs.loginScreen?.parentNode;
+  if (main) main.insertBefore(el, refs.loginScreen);
+}
+
+(function authBootOnLoad() {
+  showAuthBootScreen();
+})();
+
 function formatCurrency(value) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
 }
@@ -1268,6 +1295,7 @@ function clearLoggedUser() {
 }
 
 function renderAuth() {
+  hideAuthBootScreen();
   if (state.user) {
     refs.loginScreen.classList.add("hidden");
     refs.appScreen.classList.remove("hidden");
