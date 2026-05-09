@@ -44,7 +44,10 @@ jobs:
         run: |
           node <<'NODE'
           const fs = require("fs");
-          const url = (process.env.SUPABASE_URL || "").trim();
+          let url = (process.env.SUPABASE_URL || "").trim();
+          while (url.endsWith("/")) url = url.slice(0, -1);
+          if (/\/rest\/v1$/i.test(url)) url = url.replace(/\/rest\/v1$/i, "");
+          while (url.endsWith("/")) url = url.slice(0, -1);
           const key = (process.env.SUPABASE_ANON_KEY || "").trim();
           if (!url || !key) {
             console.error("Defina os secrets SUPABASE_URL e SUPABASE_ANON_KEY em Settings → Secrets → Actions.");

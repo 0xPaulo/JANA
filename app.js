@@ -24,6 +24,16 @@ const API_BASE =
     ? `${window.location.protocol}//${window.location.hostname}:3001`
     : "http://localhost:3001";
 
+/** Settings → API → Project URL (sem path). Remove /rest/v1 se vier da URL do Data API por engano. */
+function normalizeSupabaseProjectUrl(raw) {
+  let u = String(raw || "").trim();
+  if (!u) return u;
+  while (u.endsWith("/")) u = u.slice(0, -1);
+  if (/\/rest\/v1$/i.test(u)) u = u.replace(/\/rest\/v1$/i, "");
+  while (u.endsWith("/")) u = u.slice(0, -1);
+  return u;
+}
+
 function isSupabaseConfigured() {
   if (typeof window === "undefined") return false;
   const url = String(window.__SUPABASE_URL__ || "").trim();
@@ -37,7 +47,8 @@ async function getSupabase() {
   if (!isSupabaseConfigured()) return null;
   if (supabaseClient) return supabaseClient;
   const { createClient } = await import("https://esm.sh/@supabase/supabase-js@2");
-  supabaseClient = createClient(window.__SUPABASE_URL__, window.__SUPABASE_ANON_KEY__, {
+  const projectUrl = normalizeSupabaseProjectUrl(window.__SUPABASE_URL__);
+  supabaseClient = createClient(projectUrl, window.__SUPABASE_ANON_KEY__, {
     auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
   });
   return supabaseClient;
