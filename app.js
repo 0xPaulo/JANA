@@ -288,33 +288,6 @@ async function deleteDailyCloseRemote(closeId) {
   if (error) throw error;
 }
 
-/** Build tag visivel para confirmar JS atual no celular. Erros vao para o console (Eruda no mobile). */
-const APP_BUILD_TAG = "build-2026-05-09-supabase-auth";
-const IS_STANDALONE =
-  typeof window !== "undefined" &&
-  ((window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) ||
-    window.navigator.standalone === true);
-function debugLog(message) {
-  try { console.log("[JANA]", message); } catch (_) {}
-}
-function mountBuildBadge() {
-  if (document.getElementById("__buildBadge")) return;
-  if (IS_STANDALONE) return;
-  const tag = document.createElement("div");
-  tag.id = "__buildBadge";
-  tag.textContent = APP_BUILD_TAG;
-  tag.style.cssText =
-    "position:fixed;left:50%;top:0;transform:translateX(-50%);z-index:2147483647;font:11px/1.3 monospace;color:#fff;background:#d12;padding:4px 8px;border-radius:0 0 8px 8px;pointer-events:none;max-width:90vw;white-space:nowrap;margin:0;text-align:center;";
-  (document.body || document.documentElement).appendChild(tag);
-}
-if (typeof window !== "undefined") {
-  if (document.readyState === "loading") {
-    window.addEventListener("DOMContentLoaded", mountBuildBadge);
-  } else {
-    mountBuildBadge();
-  }
-}
-/** Comanda nova ainda nao gravada no json-server (so apos primeiro item). */
 const PENDING_ORDER_ID = "__pending__";
 let _pendingOrderPostChain = Promise.resolve();
 /** Botao Adicionar item: estado de pressao para feedback visual. */
@@ -1711,7 +1684,6 @@ function renderOrderDetails() {
     button.dataset.bound = "1";
     const fire = () => {
       const productId = String(button.dataset.productId || "");
-      debugLog(`add disparado pid=${productId}`);
       void addItemToOrder(productId);
     };
     button.addEventListener("click", fire);
