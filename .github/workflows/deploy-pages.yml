@@ -1,0 +1,68 @@
+# Publica GitHub Pages sem commitar supabase-config.js: URL e anon key vêm de Secrets.
+#
+# Requisitos no repositório GitHub:
+#   Settings → Secrets and variables → Actions → New repository secret
+#     SUPABASE_URL       = https://xxxx.supabase.co
+#     SUPABASE_ANON_KEY  = eyJhbGciOi... (chave anon do painel — nunca service_role)
+#
+# Settings → Pages → Build and deployment → Source: GitHub Actions
+# (desative deploy direto por branch se estiver ativo.)
+
+name: Deploy GitHub Pages
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Generate supabase-config.js from secrets
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          node <<'NODE'
+          const fs = require("fs");
+          const url = (process.env.SUPABASE_URL || "").trim();
+          const key = (process.env.SUPABASE_ANON_KEY || "").trim();
+          if (!url || !key) {
+            console.error("Defina os secrets SUPABASE_URL e SUPABASE_ANON_KEY em Settings → Secrets → Actions.");
+            process.exit(1);
+          }
+          const body =
+            "/** Gerado no CI. Nao commitar credenciais no repositorio. */\n" +
+            `window.__SUPABASE_URL__ = ${JSON.stringify(url)};\n` +
+            `window.__SUPABASE_ANON_KEY__ = ${JSON.stringify(key)};\n`;
+          fs.writeFileSync("supabase-config.js", body);
+          NODE
+
+      - name: Assemble site (so arquivos necessarios — sem db.json etc.)
+        run: |
+          mkdir -p _site
+          cp index.html app.js supabase-config.js _site/
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
