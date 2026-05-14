@@ -2046,6 +2046,17 @@ async function beginFinalizeFlowForOrderId(orderId) {
   renderView();
 }
 
+/** Linha para fundir ao adicionar o mesmo produto: não reaproveita leva com preparo já entregue (nova leva = nova linha). */
+function findMergeTargetLineForProduct(items, productId) {
+  const pid = String(productId);
+  for (const line of items || []) {
+    if (String(line.productId) !== pid) continue;
+    if (line.requiresPrep && line.deliveredAt) continue;
+    return line;
+  }
+  return null;
+}
+
 async function addItemToOrder(productId) {
   const products = loadProducts();
   const product = products.find((entry) => String(entry.id) === String(productId));
@@ -2065,13 +2076,9 @@ async function addItemToOrder(productId) {
         return;
       }
       const order = state.pendingNewOrder;
-      const existing = order.items.find((item) => String(item.productId) === String(product.id));
+      const existing = findMergeTargetLineForProduct(order.items, product.id);
       if (existing) {
         existing.qty += 1;
-        if (existing.requiresPrep && existing.prepStatus === "Pronto") {
-          existing.prepStatus = "Aguardando";
-          existing.requestedAt = new Date().toISOString();
-        }
       } else {
         order.items.push({
           lineId: crypto.randomUUID(),
@@ -2106,13 +2113,9 @@ async function addItemToOrder(productId) {
   const order = orders.find((entry) => String(entry.id) === String(state.selectedOrderId));
   if (!order) return;
 
-  const existing = order.items.find((item) => String(item.productId) === String(product.id));
+  const existing = findMergeTargetLineForProduct(order.items, product.id);
   if (existing) {
     existing.qty += 1;
-    if (existing.requiresPrep && existing.prepStatus === "Pronto") {
-      existing.prepStatus = "Aguardando";
-      existing.requestedAt = new Date().toISOString();
-    }
   } else {
     order.items.push({
       lineId: crypto.randomUUID(),
@@ -2140,9 +2143,24 @@ function changeItemQty(itemIndex, delta) {
 
   const item = order.items[itemIndex];
   if (!item) return;
-  item.qty += delta;
-  if (item.qty <= 0) {
-    order.items.splice(itemIndex, 1);
+  if (delta > 0 && item.requiresPrep && item.deliveredAt) {
+    order.items.push({
+      lineId: crypto.randomUUID(),
+      productId: item.productId,
+      name: item.name,
+      price: item.price,
+      qty: delta,
+      requiresPrep: item.requiresPrep === true,
+      requestedAt: new Date().toISOString(),
+      deliveredAt: null,
+      serviceSeconds: null,
+      prepStatus: item.requiresPrep ? "Aguardando" : null
+    });
+  } else {
+    item.qty += delta;
+    if (item.qty <= 0) {
+      order.items.splice(itemIndex, 1);
+    }
   }
   order.status = deriveOrderStatus(order);
 
