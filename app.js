@@ -1070,7 +1070,9 @@ function syncOrderItemsTimerInterval() {
   const order = getCurrentOrder();
   const status = order ? normalizeOrderStatus(order.status) : "";
   const openOrder = onDetail && order && status === "Aberta";
-  const hasRunning = openOrder && (order.items || []).some((item) => item.requestedAt && !item.deliveredAt);
+  const hasRunning =
+    openOrder &&
+    (order.items || []).some((item) => item.requiresPrep && item.requestedAt && !item.deliveredAt);
   if (!hasRunning) return;
   orderItemsTimerInterval = window.setInterval(() => {
     if (state.currentView !== "detail") {
@@ -1661,15 +1663,16 @@ function renderOrderDetails() {
   const itemsHtml = items.length
     ? items
       .map((item, index) => {
-        const showTimer = item.requestedAt && !item.deliveredAt && !isLocked;
+        const showTimer =
+          item.requiresPrep && item.requestedAt && !item.deliveredAt && !isLocked;
         const waitLabel =
-          item.deliveredAt && item.requestedAt
+          item.requiresPrep && item.deliveredAt && item.requestedAt
             ? `Entregue ${formatTimeShort(item.deliveredAt)}${
               item.serviceSeconds != null
                 ? ` • espera ${formatDurationFromSeconds(item.serviceSeconds)}`
                 : ""
             }`
-            : item.deliveredAt
+            : item.requiresPrep && item.deliveredAt
               ? `Entregue ${formatTimeShort(item.deliveredAt)}`
               : "";
         const showDeliverBtn = !isLocked && item.requiresPrep && item.requestedAt && !item.deliveredAt;
@@ -1688,9 +1691,9 @@ function renderOrderDetails() {
                   : ""
               }
               ${
-                item.deliveredAt
+                item.requiresPrep && item.deliveredAt
                   ? `<p class="mt-0.5 text-[11px] text-on-surface-variant">${waitLabel}</p>`
-                  : item.requestedAt && !showTimer
+                  : item.requiresPrep && item.requestedAt && !showTimer
                     ? `<p class="mt-0.5 text-[11px] text-on-surface-variant">Pedido às ${formatTimeShort(item.requestedAt)}</p>`
                     : ""
               }
