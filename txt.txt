@@ -4,3 +4,17 @@ npx --yes json-server --watch db.json --port 3001 --host 0.0.0.0
 
 eruda é o debuger de telefone
 
+
+
+# 1. Faça suas alterações
+git add .
+git commit -m "minha alteração"
+
+# 2. Subir SOMENTE para homologação
+git push homologacao main
+
+# 3. Teste no GitHub Pages da homologação
+# https://0xpaulo.github.io/JANA
+
+# 4. Só quando estiver satisfeito, subir para produção
+git push producao main
