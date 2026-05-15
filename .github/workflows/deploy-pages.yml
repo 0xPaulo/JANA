@@ -64,6 +64,7 @@ jobs:
         run: |
           mkdir -p _site
           cp index.html app.js supabase-config.js _site/
+          if [ -d image ]; then cp -r image _site/; fi
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
