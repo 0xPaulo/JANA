@@ -303,12 +303,9 @@ let addProductPressTarget = null;
 /** Atualiza cronometros na lista da comanda (1s) */
 let orderItemsTimerInterval = null;
 const THEME_PRESETS = {
-  "light-pro": { label: "Light Pro", description: "Claro neutro" },
   "dark-pro": { label: "Dark Pro", description: "Escuro confortavel" },
   apple: { label: "Apple", description: "Limpo e sofisticado" },
-  "blue-service": { label: "Blue Service", description: "Azul institucional" },
-  "high-contrast": { label: "High Contrast", description: "Acessibilidade" },
-  inu: { label: "Inu", description: "Quente, fofo e acolhedor" }
+  "blue-service": { label: "Blue Service", description: "Azul institucional" }
 };
 
 const state = {
@@ -824,12 +821,9 @@ function applyTheme() {
   const meta = document.querySelector('meta[name="theme-color"]');
   if (meta) {
     const themeColorByKey = {
-      inu: "#f59e0b",
       apple: "#0071e3",
       "blue-service": "#00234b",
-      "dark-pro": "#13161c",
-      "light-pro": "#fbf9fc",
-      "high-contrast": "#000000"
+      "dark-pro": "#13161c"
     };
     meta.setAttribute("content", themeColorByKey[theme] || "#fbf9fc");
   }

@@ -410,7 +410,7 @@
       "id": "1",
       "useTables": false,
       "useServiceFee": false,
-      "activeTheme": "light-pro",
+      "activeTheme": "apple",
       "paymentMethods": [
         {
           "id": "card",
