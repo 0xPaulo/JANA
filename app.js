@@ -307,7 +307,8 @@ const THEME_PRESETS = {
   "dark-pro": { label: "Dark Pro", description: "Escuro confortavel" },
   apple: { label: "Apple", description: "Limpo e sofisticado" },
   "blue-service": { label: "Blue Service", description: "Azul institucional" },
-  "high-contrast": { label: "High Contrast", description: "Acessibilidade" }
+  "high-contrast": { label: "High Contrast", description: "Acessibilidade" },
+  inu: { label: "Inu", description: "Quente, fofo e acolhedor" }
 };
 
 const state = {
@@ -820,6 +821,18 @@ function saveConfig(config) {
 function applyTheme() {
   const theme = state.config.activeTheme || "apple";
   document.documentElement.setAttribute("data-theme", theme);
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) {
+    const themeColorByKey = {
+      inu: "#f59e0b",
+      apple: "#0071e3",
+      "blue-service": "#00234b",
+      "dark-pro": "#13161c",
+      "light-pro": "#fbf9fc",
+      "high-contrast": "#000000"
+    };
+    meta.setAttribute("content", themeColorByKey[theme] || "#fbf9fc");
+  }
 }
 
 function updateSettingsTabsHints() {
@@ -1298,6 +1311,7 @@ function clearLoggedUser() {
 
 function renderAuth() {
   hideAuthBootScreen();
+  applyTheme();
   if (state.user) {
     refs.loginScreen.classList.add("hidden");
     refs.appScreen.classList.remove("hidden");
